@@ -1,0 +1,111 @@
+# Shopify A/B Testing Plugin — Task Map
+
+**Working name:** ShopSplit (placeholder — rename freely)
+
+**What it does:** Lets merchants A/B test storefront elements — product page layout, CTAs,
+pricing display, banners, images — without editing theme code, using Theme App Extensions.
+Merchants create experiments and variants in an embedded admin UI, traffic is split and
+tracked, and results are shown with conversion rate + statistical significance.
+
+**Stack:** Shopify Remix app template (Remix + Polaris + App Bridge) · Admin GraphQL API ·
+Theme App Extensions (App Blocks) · App Proxy for storefront data · Prisma + Postgres ·
+Shopify Billing API · mandatory GDPR webhooks.
+
+**Target:** Public Shopify App Store listing (built so a private/single-store cut is a subset).
+
+---
+
+## Milestone 0 — Project Setup & Scaffolding
+Foundation: repo, Shopify CLI app, dev store, CI.
+- [ ] Scaffold app with Shopify CLI (Remix template)
+- [ ] Configure `shopify.app.toml` (scopes, webhooks, app proxy)
+- [ ] Set up Prisma + Postgres (dev via SQLite or Docker Postgres)
+- [ ] Set up dev store + test theme for local testing
+- [ ] CI pipeline (lint, typecheck, test) on PR
+
+## Milestone 1 — Core Data Model & Admin API
+The schema and server-side API everything else builds on.
+- [ ] Design schema: Experiment, Variant, Assignment, Event, Shop
+- [ ] Prisma models + migrations
+- [ ] Experiment CRUD (GraphQL/REST resolvers in Remix loaders/actions)
+- [ ] Variant CRUD nested under Experiment
+- [ ] Traffic allocation logic (weighted split, must sum to 100%)
+- [ ] Experiment status state machine (draft → running → paused → completed)
+
+## Milestone 2 — Experiment Management UI (Admin)
+Merchant-facing embedded app screens.
+- [ ] Experiments list page (Polaris `IndexTable`, status badges)
+- [ ] Create/edit experiment flow (target element, goal metric, variants)
+- [ ] Variant editor (content override fields per target type)
+- [ ] Product/page picker (Shopify resource picker via App Bridge)
+- [ ] Start/pause/stop experiment controls + confirmation states
+- [ ] Empty states, onboarding walkthrough for first experiment
+
+## Milestone 3 — Storefront Variant Delivery
+Getting variants onto the live storefront without theme code edits.
+- [ ] Build Theme App Extension (App Block) for target sections (product page, banner)
+- [ ] App Proxy endpoint to serve active experiment/variant config for a page
+- [ ] Client-side loader script: fetch config, apply variant DOM changes
+- [ ] Fallback/graceful-degradation when no active experiment
+- [ ] Performance check: minimize layout shift / flicker on variant swap
+
+## Milestone 4 — Visitor Bucketing & Event Tracking
+Deciding who sees what, and recording what happens.
+- [ ] Deterministic bucketing (hashed visitor ID → variant, sticky via cookie)
+- [ ] Impression tracking event (variant shown)
+- [ ] Conversion tracking: add-to-cart event (Ajax Cart API hook)
+- [ ] Conversion tracking: purchase event (orders/create + orders/paid webhooks, tie back to assignment)
+- [ ] Event ingestion endpoint with basic rate limiting/validation
+- [ ] Data retention / cleanup job for old events
+
+## Milestone 5 — Results & Statistics Engine
+Turning raw events into a decision merchants can trust.
+- [ ] Aggregate impressions/conversions per variant
+- [ ] Conversion rate + revenue-per-visitor calculations
+- [ ] Statistical significance (two-proportion z-test or sequential testing)
+- [ ] Results dashboard UI (Polaris charts, confidence indicator, "declare winner")
+- [ ] Minimum sample size guardrail before declaring significance
+- [ ] Export results (CSV)
+
+## Milestone 6 — Billing & Monetization
+- [ ] Define pricing tiers (experiment count / traffic volume limits)
+- [ ] Integrate Shopify Billing API (subscription + usage-based option)
+- [ ] Plan enforcement (block new experiments over tier limit)
+- [ ] Billing settings page + upgrade prompts
+
+## Milestone 7 — Compliance, Security & GDPR
+- [ ] Implement mandatory webhooks: `customers/data_request`, `customers/redact`, `shop/redact`
+- [ ] `app/uninstalled` cleanup (purge shop data)
+- [ ] Data encryption at rest for PII (if any visitor data stored)
+- [ ] Privacy policy + data processing documentation
+- [ ] Session token / OAuth security review (embedded app auth)
+- [ ] Rate limiting & input validation on public App Proxy endpoint
+
+## Milestone 8 — Testing & QA
+- [ ] Unit tests: bucketing determinism, allocation math, stats engine
+- [ ] Integration tests: experiment CRUD, webhook handlers
+- [ ] E2E test: create experiment → visit storefront → verify variant + event recorded
+- [ ] Load test App Proxy endpoint (storefront traffic spikes)
+- [ ] Manual QA across 2–3 popular free themes (Dawn, etc.)
+
+## Milestone 9 — App Store Submission & Launch
+- [ ] App listing copy, screenshots, demo video
+- [ ] Shopify App Store review checklist pass (performance, security, UX requirements)
+- [ ] Submit for review
+- [ ] Address review feedback
+- [ ] Public launch
+
+## Milestone 10 — Post-launch
+- [ ] Merchant onboarding docs / help center
+- [ ] In-app support widget or contact flow
+- [ ] Usage analytics/telemetry for the app itself
+- [ ] Roadmap: multi-variant (A/B/n), audience targeting, checkout extensibility tests
+
+---
+
+## Dependency notes
+- Milestone 1 blocks 2, 3, 4.
+- Milestone 3 and 4 can run in parallel once 1 is done.
+- Milestone 5 depends on 4 (needs real event data).
+- Milestone 6 and 7 can start early, in parallel with 2–5.
+- Milestone 9 requires 5, 6, 7, 8 complete.
