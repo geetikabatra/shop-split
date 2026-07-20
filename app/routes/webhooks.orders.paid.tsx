@@ -14,7 +14,7 @@ interface OrderNoteAttribute {
 // so the "shopsplit_<experimentId>": "<variantId>:<visitorId>" tags set by
 // shopsplit-loader.js's tagCartForPurchaseAttribution() land here.
 export const action = async ({ request }: ActionFunctionArgs) => {
-  const { shop: shopDomain, payload } = await authenticate.webhook(request);
+  const { shop: shopDomain, topic, payload } = await authenticate.webhook(request);
 
   const shop = await getOrCreateShop(shopDomain);
   const orderId = String(payload.id ?? "");
@@ -22,6 +22,11 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   const noteAttributes: OrderNoteAttribute[] = Array.isArray(payload.note_attributes)
     ? payload.note_attributes
     : [];
+
+  console.log(
+    `Received ${topic} webhook for ${shopDomain}, order ${orderId}, ${noteAttributes.length} note attribute(s):`,
+    noteAttributes,
+  );
 
   for (const attribute of noteAttributes) {
     const name = attribute?.name;
@@ -43,6 +48,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         orderId,
         orderValue,
       });
+      console.log(
+        `Recorded PURCHASE for experiment ${experimentId}, variant ${variantId}, order ${orderId} ($${orderValue})`,
+      );
     } catch (error) {
       // A stale/tampered attribute referencing an unknown experiment or
       // variant shouldn't fail the whole webhook -- log and keep going.
