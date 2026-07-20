@@ -17,29 +17,29 @@ Shopify Billing API · mandatory GDPR webhooks.
 
 ## Milestone 0 — Project Setup & Scaffolding
 Foundation: repo, Shopify CLI app, dev store, CI.
-- [ ] Scaffold app with Shopify CLI (Remix template)
-- [ ] Configure `shopify.app.toml` (scopes, webhooks, app proxy)
-- [ ] Set up Prisma + Postgres (dev via SQLite or Docker Postgres)
-- [ ] Set up dev store + test theme for local testing
+- [x] Scaffold app with Shopify CLI (React Router template — Shopify's current default, successor to the Remix template)
+- [x] Configure `shopify.app.toml` (scopes, webhooks, app proxy) — scopes/webhooks present from scaffold; app proxy path still needs setting for Milestone 3
+- [x] Set up Prisma + Postgres (dev via SQLite or Docker Postgres) — SQLite dev datasource in place; swap to Postgres before production deploy
+- [ ] Set up dev store + test theme for local testing — needs interactive `shopify app dev` run by you (opens browser to pick/create a dev store)
 - [ ] CI pipeline (lint, typecheck, test) on PR
 
 ## Milestone 1 — Core Data Model & Admin API
 The schema and server-side API everything else builds on.
-- [ ] Design schema: Experiment, Variant, Assignment, Event, Shop
-- [ ] Prisma models + migrations
-- [ ] Experiment CRUD (GraphQL/REST resolvers in Remix loaders/actions)
-- [ ] Variant CRUD nested under Experiment
-- [ ] Traffic allocation logic (weighted split, must sum to 100%)
-- [ ] Experiment status state machine (draft → running → paused → completed)
+- [x] Design schema: Experiment, Variant, Assignment, Event, Shop
+- [x] Prisma models + migrations
+- [x] Experiment CRUD (loaders/actions in `app/models/experiment.server.ts`, `app/routes/app.experiments.*`)
+- [x] Variant CRUD nested under Experiment (`app/models/variant.server.ts`)
+- [x] Traffic allocation logic (weighted split, must sum to 100%)
+- [x] Experiment status state machine (draft → running → paused → completed)
 
 ## Milestone 2 — Experiment Management UI (Admin)
 Merchant-facing embedded app screens.
-- [ ] Experiments list page (Polaris `IndexTable`, status badges)
-- [ ] Create/edit experiment flow (target element, goal metric, variants)
-- [ ] Variant editor (content override fields per target type)
-- [ ] Product/page picker (Shopify resource picker via App Bridge)
-- [ ] Start/pause/stop experiment controls + confirmation states
-- [ ] Empty states, onboarding walkthrough for first experiment
+- [x] Experiments list page (Polaris web components table, status badges)
+- [x] Create/edit experiment flow (target element, goal metric); variant setup happens on the detail page
+- [x] Variant editor (name, control flag, weight, free-text content override)
+- [ ] Product/page picker (Shopify resource picker via App Bridge) — currently a plain text field for product GID
+- [x] Start/pause/stop experiment controls + confirmation states (state machine enforced server-side; no confirm-dialog yet on Complete)
+- [x] Empty state for zero experiments — onboarding walkthrough still pending
 
 ## Milestone 3 — Storefront Variant Delivery
 Getting variants onto the live storefront without theme code edits.
