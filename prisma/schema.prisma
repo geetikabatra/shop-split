@@ -32,3 +32,93 @@ model Session {
   refreshToken        String?
   refreshTokenExpires DateTime?
 }
+
+// --- ShopSplit domain models (Milestone 1) ---
+//
+// Enums are intentionally modeled as plain Strings, not Prisma `enum`,
+// because the dev datasource is SQLite, which has no native enum type.
+// Allowed values are enforced in the application layer (see app/models/*.server.ts).
+// ExperimentStatus: "DRAFT" | "RUNNING" | "PAUSED" | "COMPLETED"
+// ExperimentGoal:    "ADD_TO_CART" | "PURCHASE"
+// TargetType:        "PRODUCT_PAGE" | "BANNER"
+// EventType:         "IMPRESSION" | "ADD_TO_CART" | "PURCHASE"
+
+model Shop {
+  id        String   @id @default(cuid())
+  domain    String   @unique
+  planName  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  experiments Experiment[]
+}
+
+model Experiment {
+  id               String   @id @default(cuid())
+  shopId           String
+  shop             Shop     @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  name             String
+  targetType       String
+  targetResourceId String?
+  goal             String
+  status           String   @default("DRAFT")
+  startedAt        DateTime?
+  endedAt          DateTime?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  variants    Variant[]
+  assignments Assignment[]
+  events      Event[]
+
+  @@index([shopId, status])
+}
+
+model Variant {
+  id           String   @id @default(cuid())
+  experimentId String
+  experiment   Experiment @relation(fields: [experimentId], references: [id], onDelete: Cascade)
+  name         String
+  isControl    Boolean  @default(false)
+  weight       Int
+  content      String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  assignments Assignment[]
+  events      Event[]
+
+  @@index([experimentId])
+}
+
+model Assignment {
+  id           String   @id @default(cuid())
+  experimentId String
+  experiment   Experiment @relation(fields: [experimentId], references: [id], onDelete: Cascade)
+  variantId    String
+  variant      Variant  @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  visitorId    String
+  createdAt    DateTime @default(now())
+
+  events Event[]
+
+  @@unique([experimentId, visitorId])
+  @@index([variantId])
+}
+
+model Event {
+  id           String   @id @default(cuid())
+  experimentId String
+  experiment   Experiment @relation(fields: [experimentId], references: [id], onDelete: Cascade)
+  variantId    String
+  variant      Variant  @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  assignmentId String?
+  assignment   Assignment? @relation(fields: [assignmentId], references: [id], onDelete: SetNull)
+  type         String
+  orderValue   Float?
+  orderId      String?
+  createdAt    DateTime @default(now())
+
+  @@index([experimentId, variantId, type])
+  @@unique([orderId, type])
+}
