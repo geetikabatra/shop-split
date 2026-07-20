@@ -49,6 +49,11 @@ Getting variants onto the live storefront without theme code edits.
 - [x] Fallback/graceful-degradation when no active experiment (fails closed to the block's default content on any error/timeout/no-experiment)
 - [ ] Performance check: minimize layout shift / flicker on variant swap — script is deferred and swaps text post-render, so some flicker is expected; not yet measured or optimized
 
+Verified live on shopsplit-z1lscgsw.myshopify.com: added the ShopSplit
+Product CTA block to a real product page, started an experiment with two
+variants, and confirmed the storefront text flips between variant content
+on reload.
+
 Note: variant selection is currently a simple weighted random pick on every
 page load, not sticky per-visitor bucketing — that's Milestone 4's job.
 
