@@ -54,17 +54,19 @@ Product CTA block to a real product page, started an experiment with two
 variants, and confirmed the storefront text flips between variant content
 on reload.
 
-Note: variant selection is currently a simple weighted random pick on every
-page load, not sticky per-visitor bucketing — that's Milestone 4's job.
-
 ## Milestone 4 — Visitor Bucketing & Event Tracking
 Deciding who sees what, and recording what happens.
-- [ ] Deterministic bucketing (hashed visitor ID → variant, sticky via cookie)
-- [ ] Impression tracking event (variant shown)
-- [ ] Conversion tracking: add-to-cart event (Ajax Cart API hook)
-- [ ] Conversion tracking: purchase event (orders/create + orders/paid webhooks, tie back to assignment)
-- [ ] Event ingestion endpoint with basic rate limiting/validation
-- [ ] Data retention / cleanup job for old events
+- [x] Deterministic bucketing (hashed visitor ID → variant, sticky via cookie) — client-side FNV-1a hash of visitorId+experimentId against the (immutable-once-RUNNING) weight table; server upserts an Assignment as the durable record, first-write-wins
+- [x] Impression tracking event (variant shown)
+- [x] Conversion tracking: add-to-cart event (fetch-patch detecting `/cart/add` calls, works with AJAX themes like Dawn/Horizon)
+- [x] Conversion tracking: purchase event (orders/paid webhook; cart attributes carry the experiment/variant/visitor tag through to the order's note_attributes for attribution; idempotent on webhook retries via the orderId+type unique constraint)
+- [x] Event ingestion endpoint with basic rate limiting/validation (in-memory fixed-window limiter — documented as needing a shared store like Redis for a multi-instance production deployment)
+- [x] Data retention / cleanup job for old events (`npm run cleanup-events -- --days N`; no in-app scheduler, needs an external cron)
+
+17 unit tests total (added 6 for event recording: assignment stickiness,
+rejecting a variant that doesn't belong to the experiment, rejecting
+events for non-running experiments, allowing PURCHASE for paused/completed
+experiments, purchase idempotency).
 
 ## Milestone 5 — Results & Statistics Engine
 Turning raw events into a decision merchants can trust.

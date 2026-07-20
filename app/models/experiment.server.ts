@@ -171,7 +171,7 @@ export async function getActiveExperimentForTarget(
           targetType,
           targetResourceId,
         },
-        include: { variants: true },
+        include: { variants: { orderBy: { createdAt: "asc" } } },
         orderBy: { createdAt: "desc" },
       })
     : null;
@@ -185,7 +185,7 @@ export async function getActiveExperimentForTarget(
         targetType,
         targetResourceId: null,
       },
-      include: { variants: true },
+      include: { variants: { orderBy: { createdAt: "asc" } } },
       orderBy: { createdAt: "desc" },
     }));
 
