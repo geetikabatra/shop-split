@@ -145,9 +145,10 @@
   }
 
   // ---- add-to-cart detection ----
-  // Patches fetch once to detect calls to the storefront cart-add endpoint,
-  // regardless of which block/theme triggered it (works for AJAX themes
-  // like Dawn/Horizon that call /cart/add.js).
+  // Two independent detectors, since themes vary in how "Add to cart"
+  // actually submits: some AJAX cart drawers call fetch("/cart/add.js"),
+  // while a plain product form does a full-page POST to /cart/add with no
+  // fetch involved at all. Both are wired to the same listener list.
 
   var addToCartListeners = [];
 
@@ -155,7 +156,17 @@
     addToCartListeners.push(fn);
   }
 
-  function installAddToCartDetector() {
+  function notifyAddToCart() {
+    addToCartListeners.forEach(function (fn) {
+      try {
+        fn();
+      } catch (err) {
+        // Never let a tracking error break the add-to-cart flow.
+      }
+    });
+  }
+
+  function installFetchAddToCartDetector() {
     if (window.__shopsplitFetchPatched || typeof window.fetch !== "function") return;
     window.__shopsplitFetchPatched = true;
 
@@ -166,17 +177,32 @@
 
       return originalFetch.apply(this, arguments).then(function (response) {
         if (isCartAdd && response.ok) {
-          addToCartListeners.forEach(function (fn) {
-            try {
-              fn();
-            } catch (err) {
-              // Never let a tracking error break the add-to-cart flow.
-            }
-          });
+          notifyAddToCart();
         }
         return response;
       });
     };
+  }
+
+  // Fallback for themes/sections that submit the product form directly
+  // (no JS interception) rather than via fetch. The listeners we notify
+  // use fetch(..., {keepalive: true}), which is specifically designed to
+  // survive the page navigation that follows a non-AJAX form submit.
+  function installFormAddToCartDetector() {
+    if (window.__shopsplitFormPatched) return;
+    window.__shopsplitFormPatched = true;
+
+    document.addEventListener(
+      "submit",
+      function (event) {
+        var form = event.target;
+        if (!form || form.tagName !== "FORM") return;
+        var action = form.getAttribute("action") || "";
+        if (!/\/cart\/add(\.js)?(\?|$)/.test(action)) return;
+        notifyAddToCart();
+      },
+      true,
+    );
   }
 
   // ---- block init ----
@@ -239,7 +265,8 @@
     var blocks = document.querySelectorAll("[data-shopsplit-block]");
     if (blocks.length === 0) return;
 
-    installAddToCartDetector();
+    installFetchAddToCartDetector();
+    installFormAddToCartDetector();
     var visitorId = getVisitorId();
     for (var i = 0; i < blocks.length; i++) {
       initBlock(blocks[i], visitorId);
