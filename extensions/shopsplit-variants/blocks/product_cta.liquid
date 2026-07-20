@@ -1,0 +1,32 @@
+{% comment %}
+  Renders the control copy for a product-page experiment (e.g. CTA or price
+  text). shopsplit-loader.js swaps in the assigned variant's content if an
+  experiment is RUNNING for this product; otherwise this default stays put.
+{% endcomment %}
+<div
+  data-shopsplit-block
+  data-shopsplit-target-type="PRODUCT_PAGE"
+  {% if product %}
+    data-shopsplit-target-resource-id="gid://shopify/Product/{{ product.id }}"
+  {% endif %}
+>
+  <span data-shopsplit-content>{{ block.settings.default_text }}</span>
+</div>
+
+<script src="{{ 'shopsplit-loader.js' | asset_url }}" defer></script>
+
+{% schema %}
+{
+  "name": "ShopSplit: Product CTA",
+  "target": "section",
+  "settings": [
+    {
+      "type": "text",
+      "id": "default_text",
+      "label": "Default text",
+      "info": "Shown until an active experiment assigns a variant, and whenever no experiment is running.",
+      "default": "Add to cart"
+    }
+  ]
+}
+{% endschema %}

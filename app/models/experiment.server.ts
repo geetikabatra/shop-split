@@ -136,3 +136,72 @@ export async function transitionExperimentStatus(
     },
   });
 }
+
+export interface PublicVariant {
+  id: string;
+  name: string;
+  isControl: boolean;
+  weight: number;
+  content: string;
+}
+
+export interface PublicExperiment {
+  id: string;
+  goal: ExperimentGoal;
+  variants: PublicVariant[];
+}
+
+/**
+ * Storefront-facing lookup, reached via the App Proxy. Unlike getExperiment,
+ * this only ever returns RUNNING experiments and only the fields safe to
+ * expose to an unauthenticated visitor (no shop id, timestamps, or target
+ * resource). A product-specific experiment takes priority over a site-wide
+ * one targeting the same slot.
+ */
+export async function getActiveExperimentForTarget(
+  shopId: string,
+  targetType: TargetType,
+  targetResourceId: string | null,
+): Promise<PublicExperiment | null> {
+  const specific = targetResourceId
+    ? await prisma.experiment.findFirst({
+        where: {
+          shopId,
+          status: "RUNNING" satisfies ExperimentStatus,
+          targetType,
+          targetResourceId,
+        },
+        include: { variants: true },
+        orderBy: { createdAt: "desc" },
+      })
+    : null;
+
+  const experiment =
+    specific ??
+    (await prisma.experiment.findFirst({
+      where: {
+        shopId,
+        status: "RUNNING" satisfies ExperimentStatus,
+        targetType,
+        targetResourceId: null,
+      },
+      include: { variants: true },
+      orderBy: { createdAt: "desc" },
+    }));
+
+  if (!experiment) {
+    return null;
+  }
+
+  return {
+    id: experiment.id,
+    goal: experiment.goal as ExperimentGoal,
+    variants: experiment.variants.map((v) => ({
+      id: v.id,
+      name: v.name,
+      isControl: v.isControl,
+      weight: v.weight,
+      content: v.content,
+    })),
+  };
+}

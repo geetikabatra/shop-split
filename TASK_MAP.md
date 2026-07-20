@@ -43,11 +43,14 @@ Merchant-facing embedded app screens.
 
 ## Milestone 3 — Storefront Variant Delivery
 Getting variants onto the live storefront without theme code edits.
-- [ ] Build Theme App Extension (App Block) for target sections (product page, banner)
-- [ ] App Proxy endpoint to serve active experiment/variant config for a page
-- [ ] Client-side loader script: fetch config, apply variant DOM changes
-- [ ] Fallback/graceful-degradation when no active experiment
-- [ ] Performance check: minimize layout shift / flicker on variant swap
+- [x] Build Theme App Extension (App Block) for target sections (product page, banner)
+- [x] App Proxy endpoint to serve active experiment/variant config for a page
+- [x] Client-side loader script: fetch config, apply variant DOM changes
+- [x] Fallback/graceful-degradation when no active experiment (fails closed to the block's default content on any error/timeout/no-experiment)
+- [ ] Performance check: minimize layout shift / flicker on variant swap — script is deferred and swaps text post-render, so some flicker is expected; not yet measured or optimized
+
+Note: variant selection is currently a simple weighted random pick on every
+page load, not sticky per-visitor bucketing — that's Milestone 4's job.
 
 ## Milestone 4 — Visitor Bucketing & Event Tracking
 Deciding who sees what, and recording what happens.

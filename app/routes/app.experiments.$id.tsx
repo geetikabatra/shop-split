@@ -110,7 +110,7 @@ export default function ExperimentDetail() {
 
       <s-section heading="Overview">
         <s-stack direction="inline" gap="large">
-          <s-paragraph>
+          <s-stack direction="inline" gap="small" alignItems="center">
             <s-text type="strong">Status: </s-text>
             <s-badge
               tone={
@@ -125,7 +125,7 @@ export default function ExperimentDetail() {
             >
               {experiment.status}
             </s-badge>
-          </s-paragraph>
+          </s-stack>
           <s-paragraph>
             <s-text type="strong">Target: </s-text>
             {experiment.targetType}

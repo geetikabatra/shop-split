@@ -1,0 +1,26 @@
+{% comment %}
+  Site-wide banner experiment slot (no product context). Same fallback
+  behavior as product_cta.liquid: shopsplit-loader.js overwrites the text
+  only when a RUNNING BANNER experiment exists for this shop.
+{% endcomment %}
+<div data-shopsplit-block data-shopsplit-target-type="BANNER">
+  <div data-shopsplit-content>{{ block.settings.default_text }}</div>
+</div>
+
+<script src="{{ 'shopsplit-loader.js' | asset_url }}" defer></script>
+
+{% schema %}
+{
+  "name": "ShopSplit: Banner",
+  "target": "section",
+  "settings": [
+    {
+      "type": "text",
+      "id": "default_text",
+      "label": "Default banner text",
+      "info": "Shown until an active experiment assigns a variant, and whenever no experiment is running.",
+      "default": "Free shipping on orders over $50"
+    }
+  ]
+}
+{% endschema %}
