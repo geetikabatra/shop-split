@@ -1,0 +1,32 @@
+name: Cleanup old events
+
+# There's no in-app job runner (see scripts/cleanup-events.ts), so this
+# workflow is the external scheduler that drives it. Requires a
+# DATABASE_URL repo/environment secret pointing at the production
+# database -- meaningful once the Postgres migration lands, since a local
+# SQLite file isn't reachable from a GitHub-hosted runner.
+on:
+  schedule:
+    - cron: "0 3 * * *" # daily at 03:00 UTC
+  workflow_dispatch:
+    inputs:
+      days:
+        description: "Delete events older than this many days"
+        required: false
+        default: "90"
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - run: npm ci
+
+      - run: npm run cleanup-events -- --days "${{ github.event.inputs.days || '90' }}"
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
