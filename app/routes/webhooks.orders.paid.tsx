@@ -2,6 +2,7 @@ import type { ActionFunctionArgs } from "react-router";
 import { authenticate } from "../shopify.server";
 import { getOrCreateShop } from "../models/shop.server";
 import { recordEvent } from "../models/event.server";
+import { captureException } from "../utils/sentry.server";
 
 const ATTRIBUTE_PREFIX = "shopsplit_";
 
@@ -53,8 +54,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       );
     } catch (error) {
       // A stale/tampered attribute referencing an unknown experiment or
-      // variant shouldn't fail the whole webhook -- log and keep going.
-      console.error(`Failed to record purchase event for order ${orderId}:`, error);
+      // variant shouldn't fail the whole webhook -- report and keep going.
+      captureException(error, { shopDomain, orderId, experimentId, variantId });
     }
   }
 
