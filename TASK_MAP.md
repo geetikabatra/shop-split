@@ -78,8 +78,13 @@ Two fixes required to get there, both now in code:
   `registerWebhooks` explicitly.
 - Add-to-cart detection needs both the fetch-patch and a native
   form-submit fallback, since not all "Add to cart" paths go through
-  `fetch` ("Buy it now" uses an accelerated checkout that skips both --
-  a known gap, not yet handled).
+  `fetch`.
+
+"Buy it now" accelerated checkout bypassed both add-to-cart detectors
+(found during the live verification above) -- fixed by tagging the cart
+for purchase attribution at impression time instead of on an add-to-cart
+signal, which covers every checkout path regardless of mechanism. See
+GITHUB_ISSUES.md for the full writeup.
 
 ## Milestone 5 — Results & Statistics Engine
 Turning raw events into a decision merchants can trust.

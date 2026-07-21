@@ -130,7 +130,10 @@
 
   // ---- cart attribution (for purchase tracking) ----
   // Tags the cart with this visitor's assignment so the orders/paid webhook
-  // can attribute the eventual order back to the right variant.
+  // can attribute the eventual order back to the right variant. Called at
+  // impression time (see initBlock), not on an add-to-cart signal, so it
+  // covers every checkout path -- including "Buy it now" and other
+  // accelerated checkouts that don't go through /cart/add.
 
   function tagCartForPurchaseAttribution(experimentId, variantId, visitorId) {
     var attributes = {};
@@ -145,10 +148,13 @@
   }
 
   // ---- add-to-cart detection ----
-  // Two independent detectors, since themes vary in how "Add to cart"
-  // actually submits: some AJAX cart drawers call fetch("/cart/add.js"),
-  // while a plain product form does a full-page POST to /cart/add with no
-  // fetch involved at all. Both are wired to the same listener list.
+  // Only used to report ADD_TO_CART conversion events for ADD_TO_CART-goal
+  // experiments -- PURCHASE-goal cart tagging no longer depends on this
+  // (see tagCartForPurchaseAttribution above). Two independent detectors,
+  // since themes vary in how "Add to cart" actually submits: some AJAX
+  // cart drawers call fetch("/cart/add.js"), while a plain product form
+  // does a full-page POST to /cart/add with no fetch involved at all. Both
+  // are wired to the same listener list.
 
   var addToCartListeners = [];
 
@@ -254,9 +260,13 @@
           });
         });
       } else if (experiment.goal === "PURCHASE") {
-        onAddToCart(function () {
-          tagCartForPurchaseAttribution(experiment.id, variant.id, visitorId);
-        });
+        // Tag the cart as soon as the visitor is bucketed, rather than
+        // waiting for an add-to-cart signal. "Buy it now" and other
+        // accelerated-checkout paths don't reliably go through /cart/add
+        // at all, so waiting for that signal misses them entirely. Tagging
+        // early means some carts that never convert get tagged too, but
+        // that's just inert metadata -- not a false event.
+        tagCartForPurchaseAttribution(experiment.id, variant.id, visitorId);
       }
     });
   }

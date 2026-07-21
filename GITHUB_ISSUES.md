@@ -550,26 +550,27 @@ add-to-cart is caught regardless of which mechanism the theme/button uses.
 
 ---
 
-### [OPEN] "Buy it now" checkout isn't tracked
+### [RESOLVED] "Buy it now" checkout isn't tracked
 **Labels:** bug, storefront
 **Milestone:** M4 Bucketing & Tracking
 
-Clicking **"Buy it now"** (Shopify's accelerated checkout button) bypasses
-both add-to-cart detectors, since it appears to use a direct-to-checkout
-path that never calls `/cart/add`. Purchases made this way won't be
-tagged with the experiment/variant/visitor attribute, so the `orders/paid`
-webhook has nothing to attribute them to -- these conversions are
-currently invisible to results.
+Clicking **"Buy it now"** (Shopify's accelerated checkout button) bypassed
+both add-to-cart detectors, since it uses a direct-to-checkout path that
+never calls `/cart/add`. Purchases made this way weren't tagged with the
+experiment/variant/visitor attribute, so the `orders/paid` webhook had
+nothing to attribute them to -- these conversions were invisible to
+results.
 
-**Acceptance criteria**
-- [ ] Investigate what request(s) "Buy it now" actually makes and add a
-      corresponding detector, or
-- [ ] Consider tagging the cart proactively at variant-assignment time
-      (impression) instead of waiting for an add-to-cart signal -- since a
-      cart already exists once a storefront session starts, this would
-      close the "Buy it now" gap and any other untracked checkout entry
-      point, at the cost of tagging some carts that never convert
-      (harmless extra metadata, not a false event)
+**Fix:** For PURCHASE-goal experiments, `tagCartForPurchaseAttribution` is
+now called immediately at impression time (as soon as a visitor is
+bucketed into a variant), instead of waiting for an add-to-cart signal.
+Since a cart attribute survives regardless of which checkout path a
+visitor eventually takes, this closes the "Buy it now" gap and any other
+untracked checkout entry point in one change, at the cost of tagging some
+carts that never convert (harmless inert metadata, not a false event).
+ADD_TO_CART-goal experiments are unaffected -- those still rely on the
+fetch/form add-to-cart detectors, since that goal is specifically about
+the add-to-cart action itself.
 
 ---
 
@@ -577,7 +578,6 @@ currently invisible to results.
 
 Gaps that are fine for local dev-store testing but would be genuinely
 risky or broken for real merchants and real traffic. Distinct from the
-"Buy it now" bug above (still open, tracked there) and from the
 billing/compliance/QA work already scoped in Milestones 6-9 -- these are
 the operational/infrastructure items that surfaced from actually running
 this app, not from initial planning.
