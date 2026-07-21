@@ -68,6 +68,19 @@ rejecting a variant that doesn't belong to the experiment, rejecting
 events for non-running experiments, allowing PURCHASE for paused/completed
 experiments, purchase idempotency).
 
+Verified live end-to-end on shopsplit-z1lscgsw.myshopify.com: impression on
+page load, cart tagged with the experiment/variant/visitor on "Add to
+cart," and a real test order (Bogus Gateway) produced a PURCHASE event via
+the orders/paid webhook, correctly attributed to the assigned variant.
+Two fixes required to get there, both now in code:
+- shopify.app.toml alone doesn't register webhooks for `app dev` sessions;
+  added an `afterAuth` hook in app/shopify.server.ts calling
+  `registerWebhooks` explicitly.
+- Add-to-cart detection needs both the fetch-patch and a native
+  form-submit fallback, since not all "Add to cart" paths go through
+  `fetch` ("Buy it now" uses an accelerated checkout that skips both --
+  a known gap, not yet handled).
+
 ## Milestone 5 — Results & Statistics Engine
 Turning raw events into a decision merchants can trust.
 - [ ] Aggregate impressions/conversions per variant
