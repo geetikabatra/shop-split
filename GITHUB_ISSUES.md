@@ -573,6 +573,174 @@ currently invisible to results.
 
 ---
 
+## Production readiness
+
+Gaps that are fine for local dev-store testing but would be genuinely
+risky or broken for real merchants and real traffic. Distinct from the
+"Buy it now" bug above (still open, tracked there) and from the
+billing/compliance/QA work already scoped in Milestones 6-9 -- these are
+the operational/infrastructure items that surfaced from actually running
+this app, not from initial planning.
+
+---
+
+### Migrate the database from SQLite to Postgres
+**Labels:** backend, production-readiness
+
+The dev datasource is SQLite (`prisma/schema.prisma`), which was the
+right call for zero-setup local development but doesn't hold up for a
+real multi-tenant production deployment: no concurrent-write safety
+under real load, no managed backups, and it lives on a single instance's
+disk (incompatible with any horizontally-scaled or ephemeral-filesystem
+host).
+
+**Acceptance criteria**
+- [ ] `datasource db` provider switched to `postgresql`, URL from
+      `env("DATABASE_URL")`
+- [ ] Migrations regenerated/verified against a real Postgres instance
+- [ ] Connection pooling configured appropriately for the target host
+      (e.g. PgBouncer or the host's built-in pooler)
+- [ ] `Assignment`/`Event` write-heavy paths spot-checked for lock
+      contention under concurrent load
+
+---
+
+### Replace the in-memory rate limiter with a shared store
+**Labels:** backend, production-readiness
+
+`app/utils/rate-limit.server.ts` is a fixed-window limiter backed by a
+plain in-process `Map`, called out at the time as a deliberate MVP
+tradeoff. It only rate-limits per server instance -- useless the moment
+the app runs on more than one instance (any real production deployment
+for redundancy/scaling), since each instance has its own independent
+counters.
+
+**Acceptance criteria**
+- [ ] Rate limiting backed by a shared store (Redis, or the host's
+      equivalent) so limits hold across all running instances
+- [ ] Existing behavior (429 on limit, per shop+visitor key) preserved
+- [ ] Load-tested with multiple instances running concurrently
+
+---
+
+### Add anti-flicker handling to the storefront loader
+**Labels:** storefront, production-readiness
+
+`shopsplit-loader.js` swaps variant content in *after* the page renders
+the block's default/control text, so every visitor briefly sees the
+control before (possibly) seeing their assigned variant -- a "flash of
+original content" that's a known weak point relative to production A/B
+testing tools, which typically hide the element until the variant is
+decided.
+
+**Acceptance criteria**
+- [ ] Block is hidden (e.g. `visibility: hidden` or similar) until the
+      loader script has either applied a variant or confirmed no
+      experiment is active
+- [ ] Hide/reveal has a hard timeout fallback so a slow/failed request
+      never leaves the block permanently hidden
+- [ ] Perceived flicker measured before/after on a real theme
+
+---
+
+### Wire up event retention cleanup to a real scheduler
+**Labels:** backend, production-readiness
+
+`npm run cleanup-events -- --days N` exists and works, but nothing calls
+it automatically -- there's no in-app job runner, and it was only ever
+run manually during development.
+
+**Acceptance criteria**
+- [ ] Scheduled externally (host's cron/scheduled-task feature, e.g.
+      Heroku Scheduler, Fly Machines cron, GitHub Actions on a schedule)
+      to run on a sane cadence (e.g. daily)
+- [ ] Retention window documented and configurable via env var, not a
+      hardcoded flag
+- [ ] Failure of a scheduled run is visible (alerting, or at minimum
+      logged somewhere checked)
+
+---
+
+### Add structured error monitoring
+**Labels:** backend, production-readiness
+
+Right now, errors (including the ones we manually diagnosed by grepping
+`shopify app dev`'s terminal output this session) only go to
+`console.log`/`console.error`, which disappears once the app isn't
+running in a foreground dev terminal. In production there's no dev
+terminal to read.
+
+**Acceptance criteria**
+- [ ] Error tracking service integrated (e.g. Sentry) for both the web
+      process and webhook handlers
+- [ ] Webhook processing failures (e.g. `recordEvent` throwing inside
+      `webhooks.orders.paid.tsx`) are captured, not just logged and
+      swallowed
+- [ ] Alerting on elevated error rate, not just individual errors
+
+---
+
+### Harden production deployment configuration
+**Labels:** setup, production-readiness
+
+The app currently runs against a `trycloudflare.com` tunnel that changes
+on every `shopify app dev` restart, with `application_url` in
+`shopify.app.toml` left as a placeholder. None of this is viable for a
+real install.
+
+**Acceptance criteria**
+- [ ] App deployed to a real host with a stable domain and HTTPS
+- [ ] `shopify.app.toml` `application_url`/`auth.redirect_urls`/
+      `app_proxy.url` updated to the stable production domain and
+      deployed via `shopify app deploy`
+- [ ] Production secrets (`SHOPIFY_API_SECRET`, `DATABASE_URL`, etc.)
+      managed via the host's secret store, never committed
+- [ ] `SHOPIFY_APP_URL` and friends verified correct in the deployed
+      environment (not just locally)
+
+---
+
+### Multi-tenant shop-scoping audit
+**Labels:** backend, security, production-readiness
+
+Every model query in this app is written to be scoped by `shopId`, but
+that's been enforced by convention (each function takes a `shopId` and
+filters by it), not by any structural guarantee. One missed `where`
+clause in a future change would leak one merchant's experiment data to
+another -- a serious issue for a multi-tenant app.
+
+**Acceptance criteria**
+- [ ] Audit every Prisma query in `app/models/*.server.ts` and
+      `app/routes/*.tsx` for shop-scoping
+- [ ] Add a regression test that asserts cross-shop access is impossible
+      (e.g. shop A cannot read/mutate shop B's experiment by ID)
+- [ ] Consider a lint rule or code-review checklist item to prevent
+      regressions here specifically
+
+---
+
+### Handle offline-token refresh failures explicitly
+**Labels:** backend, production-readiness
+
+This session hit a real case where the locally stored session looked
+valid (`isActive()` returned true) but was actually revoked
+server-side, and the failure mode was silent -- no error, just nothing
+happening (no webhook registration, no visible symptom until we dug in
+manually). `future: { expiringOfflineAccessTokens: true }` means this
+app relies on token refresh working correctly in production; there's
+currently no handling for what happens when it doesn't.
+
+**Acceptance criteria**
+- [ ] Understand and document the token refresh failure modes for
+      expiring offline access tokens in production (not a dev-store
+      reinstall scenario)
+- [ ] Failed refreshes are logged/alerted, not silently swallowed
+- [ ] A merchant whose token is irrecoverably invalid gets a clear
+      path back to a working state (re-auth prompt), not a silently
+      broken app
+
+---
+
 ## Bulk-create these issues with gh CLI
 
 Once this project has a GitHub remote, you can turn each `##` section above into
