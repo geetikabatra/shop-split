@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
+  countActiveExperiments,
   createExperiment,
   ExperimentError,
   transitionExperimentStatus,
@@ -157,5 +158,48 @@ describe("experiment state machine", () => {
     await expect(
       transitionExperimentStatus(shopId, experiment.id, "RUNNING"),
     ).rejects.toThrow(/Cannot move experiment/);
+  });
+});
+
+describe("countActiveExperiments", () => {
+  let shopId: string;
+
+  beforeEach(async () => {
+    shopId = (await createTestShop()).id;
+  });
+
+  afterEach(async () => {
+    await cleanupShop(shopId);
+  });
+
+  it("counts DRAFT, RUNNING, and PAUSED but not COMPLETED experiments", async () => {
+    const draft = await createExperiment(shopId, {
+      name: "Draft",
+      targetType: "PRODUCT_PAGE",
+      goal: "ADD_TO_CART",
+    });
+
+    const toComplete = await createExperiment(shopId, {
+      name: "Will complete",
+      targetType: "PRODUCT_PAGE",
+      goal: "ADD_TO_CART",
+    });
+    await createVariant(shopId, toComplete.id, {
+      name: "Control",
+      isControl: true,
+      weight: 100,
+      content: "{}",
+    });
+    await createVariant(shopId, toComplete.id, {
+      name: "B",
+      isControl: false,
+      weight: 0,
+      content: "{}",
+    });
+    await transitionExperimentStatus(shopId, toComplete.id, "RUNNING");
+    await transitionExperimentStatus(shopId, toComplete.id, "COMPLETED");
+
+    expect(await countActiveExperiments(shopId)).toBe(1);
+    expect(draft.status).toBe("DRAFT");
   });
 });

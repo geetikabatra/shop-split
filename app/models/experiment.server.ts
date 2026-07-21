@@ -50,6 +50,13 @@ export async function listExperiments(shopId: string) {
   });
 }
 
+/** Non-COMPLETED experiments -- the count a plan's limit applies to. */
+export async function countActiveExperiments(shopId: string) {
+  return prisma.experiment.count({
+    where: { shopId, status: { in: ["DRAFT", "RUNNING", "PAUSED"] } },
+  });
+}
+
 export async function getExperiment(shopId: string, id: string) {
   const experiment = await prisma.experiment.findFirst({
     where: { id, shopId },

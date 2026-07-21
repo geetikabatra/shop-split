@@ -106,10 +106,24 @@ known cases, aggregation math against seeded events, double-conversion
 dedup, and the sample-size guardrail.
 
 ## Milestone 6 — Billing & Monetization
-- [ ] Define pricing tiers (experiment count / traffic volume limits)
-- [ ] Integrate Shopify Billing API (subscription + usage-based option)
-- [ ] Plan enforcement (block new experiments over tier limit)
-- [ ] Billing settings page + upgrade prompts
+- [x] Define pricing tiers (experiment count / traffic volume limits) — Free: 1 active (non-Completed) experiment at a time; Growth ($9.99/mo): unlimited
+- [x] Integrate Shopify Billing API (subscription + usage-based option) — subscription only; `app/shopify.server.ts` billing config + `billing.request`/`billing.check`/`billing.cancel`
+- [x] Plan enforcement (block new experiments over tier limit) — enforced server-side in the create-experiment action, not just the UI
+- [x] Billing settings page + upgrade prompts — `/app/billing`; upgrade CTA also surfaces inline when experiment creation is blocked
+
+3 new unit tests (31 total) for plan-limit logic. Note: `billing.request`
+is called with `isTest: true` for now since this app is pre-launch --
+needs revisiting before a real production launch (tracked in the
+deployment-hardening issue in GITHUB_ISSUES.md) so real merchants are
+actually charged.
+
+Also hit the same client/server import-leak build error as Milestone 5,
+twice, for the same underlying reason: React Router treats every export
+of a `.server.ts` file as server-only, including plain constants a route
+component wants to display directly. Fixed by keeping billing plan
+names/limits in a dedicated non-`.server` file
+(`app/models/billing-plans.ts`) instead of threading each new constant
+through a loader one at a time.
 
 ## Milestone 7 — Compliance, Security & GDPR
 - [ ] Implement mandatory webhooks: `customers/data_request`, `customers/redact`, `shop/redact`

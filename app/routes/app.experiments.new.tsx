@@ -1,17 +1,34 @@
 import type { ActionFunctionArgs } from "react-router";
 import { Form, redirect, useActionData, useNavigation } from "react-router";
-import { authenticate } from "../shopify.server";
+import { authenticate, GROWTH_PLAN } from "../shopify.server";
 import { getOrCreateShop } from "../models/shop.server";
 import {
+  countActiveExperiments,
   createExperiment,
   EXPERIMENT_GOALS,
   TARGET_TYPES,
 } from "../models/experiment.server";
+import { getMaxActiveExperiments } from "../models/billing-plans";
 import { z } from "zod";
 
 export const action = async ({ request }: ActionFunctionArgs) => {
-  const { session } = await authenticate.admin(request);
+  const { session, billing } = await authenticate.admin(request);
   const shop = await getOrCreateShop(session.shop);
+
+  const { hasActivePayment, appSubscriptions } = await billing.check({ plans: [GROWTH_PLAN] });
+  const planName = hasActivePayment ? (appSubscriptions[0]?.name ?? null) : null;
+  const maxActiveExperiments = getMaxActiveExperiments(planName);
+
+  if (maxActiveExperiments !== null) {
+    const activeCount = await countActiveExperiments(shop.id);
+    if (activeCount >= maxActiveExperiments) {
+      return {
+        error: `You've reached the ${maxActiveExperiments}-active-experiment limit on the free plan. Complete an existing experiment or upgrade to run more at once.`,
+        upgrade: true,
+      };
+    }
+  }
+
   const formData = await request.formData();
 
   try {
@@ -45,7 +62,12 @@ export default function NewExperiment() {
           <s-stack direction="block" gap="base">
             {actionData?.error && (
               <s-banner tone="critical" heading="Couldn't create experiment">
-                {actionData.error}
+                <s-paragraph>{actionData.error}</s-paragraph>
+                {actionData.upgrade && (
+                  <s-button href="/app/billing" slot="secondary-actions">
+                    View plans
+                  </s-button>
+                )}
               </s-banner>
             )}
 

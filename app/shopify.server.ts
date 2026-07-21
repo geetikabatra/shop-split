@@ -2,11 +2,15 @@ import "@shopify/shopify-app-react-router/adapters/node";
 import {
   ApiVersion,
   AppDistribution,
+  BillingInterval,
   DeliveryMethod,
   shopifyApp,
 } from "@shopify/shopify-app-react-router/server";
 import { PrismaSessionStorage } from "@shopify/shopify-app-session-storage-prisma";
 import prisma from "./db.server";
+import { GROWTH_PLAN } from "./models/billing-plans";
+
+export { GROWTH_PLAN };
 
 const shopify = shopifyApp({
   apiKey: process.env.SHOPIFY_API_KEY,
@@ -19,6 +23,17 @@ const shopify = shopifyApp({
   distribution: AppDistribution.AppStore,
   future: {
     expiringOfflineAccessTokens: true,
+  },
+  billing: {
+    [GROWTH_PLAN]: {
+      lineItems: [
+        {
+          amount: 9.99,
+          currencyCode: "USD",
+          interval: BillingInterval.Every30Days,
+        },
+      ],
+    },
   },
   // Webhook topics declared in shopify.app.toml aren't enough on their own
   // for `app dev` sessions -- they only reliably sync via `app deploy`.
