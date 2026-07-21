@@ -394,17 +394,68 @@ retention policy.
 
 ---
 
-## Security review: embedded app auth & App Proxy
+## [DONE] Security review: embedded app auth & App Proxy
 **Labels:** compliance, backend
 **Milestone:** M7 Compliance
 
 Audit session token handling, OAuth flow, and the public App Proxy endpoint for
 injection, auth bypass, and data leakage risks.
 
-**Acceptance criteria**
-- [ ] No shop data accessible without valid session token on admin routes
-- [ ] App Proxy endpoint verified to only leak intended public data
-- [ ] Findings documented and fixed or ticketed
+**Findings:**
+- **No cross-tenant leaks found.** Every route touching Experiment/Variant/
+  Assignment/Event data either sits under the authenticated `app.tsx`
+  layout (`authenticate.admin`), is a webhook route (`authenticate.webhook`,
+  HMAC-verified), or is an App Proxy route (`authenticate.public.appProxy`,
+  signature-verified). In the model layer, every mutation by bare `id`
+  (`variant.server.ts`'s update/delete, `experiment.server.ts`'s update/
+  transition) is preceded by an ownership check (`getExperiment(shopId, id)`
+  or equivalent) in the same function -- there's no path that reaches a
+  Prisma call with an unverified foreign ID.
+- **App Proxy responses don't leak internal fields.** `proxy.config.tsx`'s
+  `PublicExperiment` shape includes only `id`, `goal`, and per-variant
+  `id`/`name`/`isControl`/`weight`/`content` -- no `shopId`, timestamps, or
+  other admin-only fields.
+- **[OPEN] Rate limiter is trivially bypassable.** `proxy.event.tsx`'s rate
+  limit key is `` `${shopDomain}:${visitorId}` ``, but `visitorId` is fully
+  attacker-controlled in the POST body -- rotating a fresh fake visitor ID
+  on every request sidesteps the per-visitor limit entirely. This lets
+  anyone spam fake `IMPRESSION`/`ADD_TO_CART` events for any real `RUNNING`
+  experiment on a shop, skewing conversion-rate results (though `PURCHASE`/
+  revenue data is unaffected -- that's webhook-only, never client-reported,
+  per the existing `clientEventSchema` restriction). Moved to its own issue
+  below since it needs a real fix (e.g. IP-based limiting in addition to
+  visitorId, or a lightweight proof-of-work/challenge), not just a note.
+
+---
+
+## [RESOLVED] Event rate limiter can be bypassed by rotating visitorId
+**Labels:** bug, backend, security
+**Milestone:** M7 Compliance
+
+Found during the security review above. `isRateLimited` in
+`app/utils/rate-limit.server.ts` was keyed only by
+`` `${shopDomain}:${visitorId}` `` in `proxy.event.tsx`, but `visitorId`
+comes straight from the attacker-controlled POST body with no
+server-side identity behind it. A script that generates a new random
+`visitorId` per request defeated the limiter completely, since each
+request looked like a brand-new visitor's first-ever event.
+
+Impact was data-quality, not data-leakage: an attacker could inflate
+`IMPRESSION`/`ADD_TO_CART` counts for any real `RUNNING` experiment,
+skewing the conversion rates and significance calculations merchants
+rely on to make decisions. `PURCHASE` events were never affected, since
+those only ever come from the server-verified `orders/paid` webhook.
+
+**Fix:** added `getClientIp()` (reads `x-forwarded-for`) and now rate
+limit on *both* `` `ip:${shopDomain}:${clientIp}` `` and
+`` `visitor:${shopDomain}:${visitorId}` `` -- a request is blocked if
+either limit is hit. IP is much harder for a client to rotate per
+request than a self-declared visitorId, so this closes the practical
+bypass while keeping the existing per-visitor limit as a second layer.
+Not a perfect fix (IP can still be rotated via proxies/botnets, and
+shared IPs -- offices, mobile carrier NAT -- could see false positives
+under heavy legitimate traffic), but a real improvement over a
+trivially-defeated single key. New unit tests cover both functions.
 
 ---
 

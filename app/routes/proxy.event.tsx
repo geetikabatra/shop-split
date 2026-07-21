@@ -3,7 +3,7 @@ import { z } from "zod";
 import { authenticate } from "../shopify.server";
 import { getOrCreateShop } from "../models/shop.server";
 import { EventError, recordEvent } from "../models/event.server";
-import { isRateLimited } from "../utils/rate-limit.server";
+import { getClientIp, isRateLimited } from "../utils/rate-limit.server";
 
 // Only IMPRESSION and ADD_TO_CART are accepted from the storefront client.
 // PURCHASE events only ever come from the orders/paid webhook (see
@@ -40,7 +40,14 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     return Response.json({ error: "Invalid event payload" }, { status: 400 });
   }
 
-  if (isRateLimited(`${shopDomain}:${parsed.data.visitorId}`)) {
+  // visitorId alone isn't a safe rate-limit key -- it's attacker-controlled
+  // in the request body, so a script can defeat a visitorId-only limit by
+  // just making up a fresh one per request. IP is much harder to rotate.
+  const clientIp = getClientIp(request);
+  if (
+    isRateLimited(`ip:${shopDomain}:${clientIp}`) ||
+    isRateLimited(`visitor:${shopDomain}:${parsed.data.visitorId}`)
+  ) {
     return Response.json({ error: "Too many requests" }, { status: 429 });
   }
 

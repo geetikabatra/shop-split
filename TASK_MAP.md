@@ -126,12 +126,15 @@ names/limits in a dedicated non-`.server` file
 through a loader one at a time.
 
 ## Milestone 7 — Compliance, Security & GDPR
-- [ ] Implement mandatory webhooks: `customers/data_request`, `customers/redact`, `shop/redact`
-- [ ] `app/uninstalled` cleanup (purge shop data)
-- [ ] Data encryption at rest for PII (if any visitor data stored)
-- [ ] Privacy policy + data processing documentation
-- [ ] Session token / OAuth security review (embedded app auth)
-- [ ] Rate limiting & input validation on public App Proxy endpoint
+- [x] Implement mandatory webhooks: `customers/data_request`, `customers/redact`, `shop/redact` — first two just acknowledge (no customer-linked data is ever stored); shop/redact does a real purge via cascade delete
+- [x] `app/uninstalled` cleanup — clears the Session row only, by design; full data purge deliberately waits for `shop/redact` (~48h later) in case of reinstall, not immediately on uninstall
+- [x] Data encryption at rest for PII — assessed as not applicable: visitorId is an app-generated anonymous string, never linked to a Shopify customer identity, email, or name, so there's no PII in our tables to encrypt
+- [ ] Privacy policy + data processing documentation — not started; this is merchant-facing legal/policy content, not code, and needs to be written by/with the app owner before App Store submission
+- [x] Session token / OAuth security review (embedded app auth) — see GITHUB_ISSUES.md; no cross-tenant leaks found, every mutation gated by an ownership check before touching a row by bare ID
+- [x] Rate limiting & input validation on public App Proxy endpoint — found and fixed a real gap: the limiter was keyed by attacker-controlled visitorId alone, trivially bypassed by rotating fake IDs; now also rate-limited by client IP
+
+5 new unit tests (36 total): shop-deletion cascade correctness, rate
+limiter behavior, and getClientIp header parsing.
 
 ## Milestone 8 — Testing & QA
 - [ ] Unit tests: bucketing determinism, allocation math, stats engine

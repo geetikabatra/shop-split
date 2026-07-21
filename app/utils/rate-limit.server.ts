@@ -25,3 +25,17 @@ export function isRateLimited(key: string): boolean {
   bucket.count += 1;
   return bucket.count > MAX_REQUESTS_PER_WINDOW;
 }
+
+/**
+ * Best-effort client IP from the standard forwarding header. Unlike a
+ * client-supplied visitorId, this isn't something a request body can just
+ * declare a fresh value for on every call -- callers should rate limit on
+ * this in addition to, not instead of, any self-reported identifier.
+ */
+export function getClientIp(request: Request): string {
+  const forwardedFor = request.headers.get("x-forwarded-for");
+  if (forwardedFor) {
+    return forwardedFor.split(",")[0].trim();
+  }
+  return "unknown";
+}
