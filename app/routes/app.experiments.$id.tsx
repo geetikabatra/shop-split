@@ -10,6 +10,8 @@ import {
   type ExperimentStatus,
 } from "../models/experiment.server";
 import { createVariant, deleteVariant } from "../models/variant.server";
+import { computeExperimentResults } from "../models/results.server";
+import { MIN_SAMPLE_SIZE_PER_VARIANT } from "../utils/stats.server";
 
 export const loader = async ({ request, params }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
@@ -17,7 +19,8 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
 
   try {
     const experiment = await getExperiment(shop.id, params.id!);
-    return { experiment };
+    const results = await computeExperimentResults(shop.id, params.id!);
+    return { experiment, results, minSampleSize: MIN_SAMPLE_SIZE_PER_VARIANT };
   } catch (error) {
     if (error instanceof ExperimentError) {
       throw data({ message: error.message }, { status: 404 });
@@ -87,14 +90,31 @@ const NEXT_STATUS: Partial<Record<ExperimentStatus, { label: string; next: Exper
   ],
 };
 
+function formatPercent(rate: number): string {
+  return `${(rate * 100).toFixed(2)}%`;
+}
+
+function formatMoney(amount: number): string {
+  return `$${amount.toFixed(2)}`;
+}
+
 export default function ExperimentDetail() {
-  const { experiment } = useLoaderData<typeof loader>();
+  const { experiment, results, minSampleSize } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const navigation = useNavigation();
   const isSubmitting = navigation.state === "submitting";
   const isDraft = experiment.status === "DRAFT";
   const weightSum = experiment.variants.reduce((sum, v) => sum + v.weight, 0);
   const actions = NEXT_STATUS[experiment.status as ExperimentStatus] ?? [];
+
+  const control = results.variants.find((v) => v.isControl);
+  const winner = results.variants.find(
+    (v) =>
+      !v.isControl &&
+      v.vsControl?.significantAt95 &&
+      control &&
+      v.conversionRate > control.conversionRate,
+  );
 
   return (
     <s-page heading={experiment.name}>
@@ -214,6 +234,50 @@ export default function ExperimentDetail() {
               </s-stack>
             </Form>
           </s-box>
+        )}
+      </s-section>
+
+      <s-section heading="Results">
+        {isDraft ? (
+          <s-paragraph>Results will appear here once the experiment starts.</s-paragraph>
+        ) : (
+          <>
+            <s-link href={`/app/experiments/${experiment.id}/export`}>Export CSV</s-link>
+            <s-table>
+              <s-table-header-row>
+                <s-table-header>Variant</s-table-header>
+                <s-table-header>Visitors</s-table-header>
+                <s-table-header>Conversions</s-table-header>
+                <s-table-header>Conversion rate</s-table-header>
+                <s-table-header>Revenue / visitor</s-table-header>
+                <s-table-header>vs control</s-table-header>
+              </s-table-header-row>
+              <s-table-body>
+                {results.variants.map((variant) => (
+                  <s-table-row key={variant.variantId}>
+                    <s-table-cell>
+                      {variant.name}
+                      {variant.isControl && " (control)"}
+                      {winner?.variantId === variant.variantId && (
+                        <s-badge tone="success">Winner</s-badge>
+                      )}
+                    </s-table-cell>
+                    <s-table-cell>{variant.visitors}</s-table-cell>
+                    <s-table-cell>{variant.conversions}</s-table-cell>
+                    <s-table-cell>{formatPercent(variant.conversionRate)}</s-table-cell>
+                    <s-table-cell>{formatMoney(variant.revenuePerVisitor)}</s-table-cell>
+                    <s-table-cell>
+                      {variant.isControl
+                        ? "—"
+                        : variant.vsControl
+                          ? `${formatPercent(variant.vsControl.confidenceLevel)} confidence`
+                          : `Not enough data yet (min ${minSampleSize}/variant)`}
+                    </s-table-cell>
+                  </s-table-row>
+                ))}
+              </s-table-body>
+            </s-table>
+          </>
         )}
       </s-section>
     </s-page>

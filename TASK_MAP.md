@@ -83,12 +83,16 @@ Two fixes required to get there, both now in code:
 
 ## Milestone 5 — Results & Statistics Engine
 Turning raw events into a decision merchants can trust.
-- [ ] Aggregate impressions/conversions per variant
-- [ ] Conversion rate + revenue-per-visitor calculations
-- [ ] Statistical significance (two-proportion z-test or sequential testing)
-- [ ] Results dashboard UI (Polaris charts, confidence indicator, "declare winner")
-- [ ] Minimum sample size guardrail before declaring significance
-- [ ] Export results (CSV)
+- [x] Aggregate impressions/conversions per variant (`app/models/results.server.ts`; visitors = distinct Assignments, conversions = distinct assignments with an event matching the experiment's goal, so repeat conversions by one visitor don't inflate the rate)
+- [x] Conversion rate + revenue-per-visitor calculations
+- [x] Statistical significance (two-proportion z-test, `app/utils/stats.server.ts`, each variant vs control)
+- [x] Results dashboard UI (table on the experiment detail page: visitors, conversions, conversion rate, revenue/visitor, confidence vs control, "Winner" badge)
+- [x] Minimum sample size guardrail before declaring significance (30/variant; shows "Not enough data yet" below that instead of a number)
+- [x] Export results (CSV) — `/app/experiments/:id/export`
+
+10 new unit tests (27 total): z-test correctness/symmetry/thresholds against
+known cases, aggregation math against seeded events, double-conversion
+dedup, and the sample-size guardrail.
 
 ## Milestone 6 — Billing & Monetization
 - [ ] Define pricing tiers (experiment count / traffic volume limits)
