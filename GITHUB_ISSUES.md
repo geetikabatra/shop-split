@@ -807,7 +807,7 @@ another -- a serious issue for a multi-tenant app.
 
 ---
 
-### Handle offline-token refresh failures explicitly
+### [PARTIALLY RESOLVED] Handle offline-token refresh failures explicitly
 **Labels:** backend, production-readiness
 
 This session hit a real case where the locally stored session looked
@@ -815,15 +815,33 @@ valid (`isActive()` returned true) but was actually revoked
 server-side, and the failure mode was silent -- no error, just nothing
 happening (no webhook registration, no visible symptom until we dug in
 manually). `future: { expiringOfflineAccessTokens: true }` means this
-app relies on token refresh working correctly in production; there's
-currently no handling for what happens when it doesn't.
+app relies on token refresh working correctly in production.
+
+**What's fixed:** the `afterAuth` hook (`app/shopify.server.ts`) now
+wraps `registerWebhooks` in try/catch and reports failures via
+`captureException` instead of letting an unhandled rejection propagate
+into the auth flow itself -- previously that could have broken
+authentication for the merchant entirely on any transient failure.
+
+**What's still a real, open gap:** the root cause we actually hit --
+`session.isActive()` only checks the locally cached expiry timestamp,
+never whether Shopify has since revoked the token server-side -- is
+internal library behavior in `@shopify/shopify-app-react-router`, not
+something we can fix from application code without forking it. In
+production this would surface as Admin API calls failing with 401s using
+a token that "looked" valid locally; we haven't verified what the SDK
+does in that case (does `admin.graphql()` auto-trigger re-auth, or does
+it just throw?) under realistic conditions, only reproduced the dev-store
+symptom via a manual uninstall/reinstall.
 
 **Acceptance criteria**
-- [ ] Understand and document the token refresh failure modes for
-      expiring offline access tokens in production (not a dev-store
-      reinstall scenario)
-- [ ] Failed refreshes are logged/alerted, not silently swallowed
-- [ ] A merchant whose token is irrecoverably invalid gets a clear
+- [ ] Verify what actually happens when a *production* (non-dev-store)
+      offline token is revoked mid-session -- does an Admin API call
+      trigger re-auth automatically, or fail silently?
+- [ ] If it can fail silently, add explicit handling at the call sites
+      that use `admin.graphql()` (currently just `app._index.tsx`'s demo
+      action)
+- [ ] A merchant whose token is irrecoverably invalid should get a clear
       path back to a working state (re-auth prompt), not a silently
       broken app
 

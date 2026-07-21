@@ -9,6 +9,7 @@ import {
 import { PrismaSessionStorage } from "@shopify/shopify-app-session-storage-prisma";
 import prisma from "./db.server";
 import { GROWTH_PLAN } from "./models/billing-plans";
+import { captureException } from "./utils/sentry.server";
 
 export { GROWTH_PLAN };
 
@@ -55,7 +56,16 @@ const shopify = shopifyApp({
   },
   hooks: {
     afterAuth: async ({ session }) => {
-      await shopify.registerWebhooks({ session });
+      // A failure here (network blip, Shopify API hiccup, an unexpectedly
+      // revoked token) must not break auth for the merchant -- previously
+      // an unhandled rejection here would have propagated up through the
+      // auth flow itself. Report it and move on; webhook registration can
+      // be retried on the next auth cycle.
+      try {
+        await shopify.registerWebhooks({ session });
+      } catch (error) {
+        captureException(error, { shop: session.shop, stage: "afterAuth:registerWebhooks" });
+      }
     },
   },
   ...(process.env.SHOP_CUSTOM_DOMAIN
