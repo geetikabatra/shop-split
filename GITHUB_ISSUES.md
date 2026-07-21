@@ -466,6 +466,113 @@ themes, checking for layout shift and style conflicts.
 
 ---
 
+## Bugs found during Milestone 4 live testing
+
+Found and worked through while verifying the purchase-tracking path end to
+end on a real dev store (`shopsplit-z1lscgsw.myshopify.com`). Four are
+resolved; one is still open.
+
+---
+
+### [RESOLVED] Webhook subscriptions never registered for `app dev` sessions
+**Labels:** bug, backend
+**Milestone:** M4 Bucketing & Tracking
+
+Declaring webhooks in `shopify.app.toml`'s `[[webhooks.subscriptions]]` was
+not enough on its own to register them with Shopify for `shopify app dev`
+sessions. Verified via the Admin API (`webhookSubscriptions` query) that
+zero subscriptions existed on the dev store despite three being declared
+in the toml. Net effect: the `orders/paid` webhook silently never fired,
+so no `PURCHASE` events were ever recorded, with no error anywhere to
+point at the cause.
+
+**Fix:** Added an explicit `webhooks` config plus an `afterAuth` hook to
+`app/shopify.server.ts` that calls `shopify.registerWebhooks({ session })`
+on every OAuth completion. This registers subscriptions immediately on
+install/reinstall, regardless of whether `app dev` or `app deploy` is
+being used.
+
+---
+
+### [RESOLVED] Stale local session not detected after app uninstall/reinstall
+**Labels:** bug, backend
+**Milestone:** M4 Bucketing & Tracking
+
+While fixing the webhook issue above, we uninstalled and reinstalled the
+app to force a fresh OAuth cycle. The app kept silently using the old,
+now-revoked access token afterward — `session.isActive()` only checks the
+locally cached expiry timestamp, not whether Shopify has since revoked
+the token server-side. Since the stale row still looked "unexpired"
+locally, `authenticate.admin()` never re-ran the token-exchange flow, so
+no new session was ever persisted and `afterAuth` never fired, even after
+a genuine reinstall.
+
+**Fix:** No code change — this is inherent behavior of the session-storage
+library, not a bug in our app. Deleted the stale `Session` row directly
+from the database, which forced a fresh token exchange on the next
+request. Documented here as a known gotcha for future dev-store reinstalls:
+if webhook registration or Admin API calls seem stuck after a reinstall,
+delete the local `Session` row for that shop.
+
+---
+
+### [RESOLVED] Theme app block disappears from a page after app reinstall
+**Labels:** bug, storefront
+**Milestone:** M4 Bucketing & Tracking
+
+The "ShopSplit: Product CTA" block silently vanished from the product
+page's block list after uninstalling and reinstalling the app, costing
+significant debugging time before we realized the block itself was
+missing (rather than a script/config bug).
+
+**Fix:** No code change -- this is expected Shopify platform behavior:
+app blocks are tied to the app being installed and get automatically
+removed from theme sections on uninstall. Re-added the block via the
+theme editor. Documented here so it's immediately recognizable next time.
+
+---
+
+### [RESOLVED] Add-to-cart detection missed some add-to-cart flows
+**Labels:** bug, storefront
+**Milestone:** M4 Bucketing & Tracking
+
+The original loader script only patched `window.fetch` to detect
+`/cart/add` calls. A live test purchase completed with zero cart tagging
+and no `ADD_TO_CART`/`PURCHASE` events. Root-caused via direct DevTools
+Network-tab inspection (confirmed the `/cart/update.js` payload had the
+correct `shopsplit_<experimentId>: "<variantId>:<visitorId>"` shape once
+detection actually fired).
+
+**Fix:** Added a second, independent detector
+(`installFormAddToCartDetector`) listening for native `submit` events on
+forms posting to `/cart/add`, alongside the existing fetch-patch, so
+add-to-cart is caught regardless of which mechanism the theme/button uses.
+
+---
+
+### [OPEN] "Buy it now" checkout isn't tracked
+**Labels:** bug, storefront
+**Milestone:** M4 Bucketing & Tracking
+
+Clicking **"Buy it now"** (Shopify's accelerated checkout button) bypasses
+both add-to-cart detectors, since it appears to use a direct-to-checkout
+path that never calls `/cart/add`. Purchases made this way won't be
+tagged with the experiment/variant/visitor attribute, so the `orders/paid`
+webhook has nothing to attribute them to -- these conversions are
+currently invisible to results.
+
+**Acceptance criteria**
+- [ ] Investigate what request(s) "Buy it now" actually makes and add a
+      corresponding detector, or
+- [ ] Consider tagging the cart proactively at variant-assignment time
+      (impression) instead of waiting for an add-to-cart signal -- since a
+      cart already exists once a storefront session starts, this would
+      close the "Buy it now" gap and any other untracked checkout entry
+      point, at the cost of tagging some carts that never convert
+      (harmless extra metadata, not a false event)
+
+---
+
 ## Bulk-create these issues with gh CLI
 
 Once this project has a GitHub remote, you can turn each `##` section above into
