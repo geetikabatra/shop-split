@@ -81,10 +81,16 @@ Two fixes required to get there, both now in code:
   `fetch`.
 
 "Buy it now" accelerated checkout bypassed both add-to-cart detectors
-(found during the live verification above) -- fixed by tagging the cart
-for purchase attribution at impression time instead of on an add-to-cart
-signal, which covers every checkout path regardless of mechanism. See
-GITHUB_ISSUES.md for the full writeup.
+(found during the live verification above). Tagging the cart at
+impression time (instead of on an add-to-cart signal) turned out not to
+fix it either -- verified live that the cart was tagged correctly, but
+the order still had zero attribution, because dynamic checkout buttons
+build a separate checkout session that never reads the cart at all.
+Actual fix: hide the dynamic checkout button during a PURCHASE-goal
+experiment, forcing visitors through the trackable Add to cart ->
+Checkout path. That's a workaround (merchants lose that checkout option
+during the experiment), not true "Buy it now" tracking -- tracked as a
+separate open issue in GITHUB_ISSUES.md.
 
 ## Milestone 5 — Results & Statistics Engine
 Turning raw events into a decision merchants can trust.

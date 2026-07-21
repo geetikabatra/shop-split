@@ -584,6 +584,33 @@ experiments are unaffected by either change.
 
 ---
 
+### [OPEN] True "Buy it now" support (without hiding the button)
+**Labels:** bug, storefront
+**Milestone:** M4 Bucketing & Tracking
+
+The fix above resolves the data-integrity problem (no more silently-lost
+conversions) by **hiding** the dynamic checkout button entirely during a
+PURCHASE-goal experiment, not by actually tracking purchases made through
+it. That's a real product tradeoff, not just an implementation detail:
+merchants lose "Buy it now" as a checkout option for the duration of the
+experiment, which can itself suppress conversions for reasons that have
+nothing to do with the A/B test being run -- undermining the very thing
+the experiment is trying to measure cleanly.
+
+**Acceptance criteria**
+- [ ] Investigate whether Shopify's dynamic checkout button flow can be
+      intercepted or tagged before it constructs its standalone checkout
+      session (e.g. via the Storefront API, checkout `?attributes[]=`
+      query params on however the button builds its URL, or Shopify's
+      Checkout Kit APIs)
+- [ ] If no reliable client-side mechanism exists, evaluate whether this
+      requires Shopify Plus / Checkout Extensibility (server-side
+      Functions) to solve properly
+- [ ] Until solved, keep the button-hiding workaround as the safe default
+      rather than leaving purchases untracked
+
+---
+
 ## Production readiness
 
 Gaps that are fine for local dev-store testing but would be genuinely
