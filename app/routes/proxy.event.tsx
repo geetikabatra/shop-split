@@ -44,10 +44,10 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   // in the request body, so a script can defeat a visitorId-only limit by
   // just making up a fresh one per request. IP is much harder to rotate.
   const clientIp = getClientIp(request);
-  if (
-    isRateLimited(`ip:${shopDomain}:${clientIp}`) ||
-    isRateLimited(`visitor:${shopDomain}:${parsed.data.visitorId}`)
-  ) {
+  const ipLimited = await isRateLimited(`ip:${shopDomain}:${clientIp}`);
+  const visitorLimited =
+    ipLimited || (await isRateLimited(`visitor:${shopDomain}:${parsed.data.visitorId}`));
+  if (ipLimited || visitorLimited) {
     return Response.json({ error: "Too many requests" }, { status: 429 });
   }
 

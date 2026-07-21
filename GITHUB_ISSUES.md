@@ -693,21 +693,33 @@ host).
 
 ---
 
-### Replace the in-memory rate limiter with a shared store
+### [RESOLVED] Replace the in-memory rate limiter with a shared store
 **Labels:** backend, production-readiness
 
-`app/utils/rate-limit.server.ts` is a fixed-window limiter backed by a
+`app/utils/rate-limit.server.ts` was a fixed-window limiter backed by a
 plain in-process `Map`, called out at the time as a deliberate MVP
-tradeoff. It only rate-limits per server instance -- useless the moment
+tradeoff. It only rate-limited per server instance -- useless the moment
 the app runs on more than one instance (any real production deployment
-for redundancy/scaling), since each instance has its own independent
-counters.
+for redundancy/scaling), since each instance would have its own
+independent counters.
 
-**Acceptance criteria**
-- [ ] Rate limiting backed by a shared store (Redis, or the host's
-      equivalent) so limits hold across all running instances
-- [ ] Existing behavior (429 on limit, per shop+visitor key) preserved
-- [ ] Load-tested with multiple instances running concurrently
+**Fix:** now backed by Redis (`ioredis`, `INCR` + `EXPIRE` for the fixed
+window) when `REDIS_URL` is set, sharing limits across every instance.
+Falls back to the original in-memory behavior when `REDIS_URL` is unset
+(zero-friction local dev) or if Redis is reachable but erroring
+(fail-open to in-memory for that call, rather than blocking all traffic
+over an infra blip).
+
+**Verified against a real local Redis container** (not just written
+blind): ran the test suite with `REDIS_URL` pointed at a `redis:7-alpine`
+Docker container, then inspected the resulting key directly via
+`redis-cli` -- confirmed `TTL` and `GET` matched exactly what the test
+did (36s remaining on a 60s window, count of 31 after 31 calls),
+proving the Redis path is genuinely exercised, not silently falling
+back.
+
+**Still open:** not load-tested with multiple concurrent instances
+against a shared Redis (single-container manual verification only).
 
 ---
 

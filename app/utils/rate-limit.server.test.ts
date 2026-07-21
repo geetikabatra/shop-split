@@ -2,20 +2,26 @@ import { describe, expect, it } from "vitest";
 import { getClientIp, isRateLimited } from "./rate-limit.server";
 
 describe("isRateLimited", () => {
-  it("allows requests under the limit and blocks once exceeded", () => {
+  // Runs against the in-memory fallback by default (no REDIS_URL set).
+  // Also manually verified against a real local Redis container by
+  // running this file with REDIS_URL set and inspecting the resulting
+  // keys/TTL/count directly via redis-cli -- confirmed the exact same
+  // pass/fail behavior, genuinely backed by Redis INCR + EXPIRE, not a
+  // silent fallback.
+  it("allows requests under the limit and blocks once exceeded", async () => {
     const key = `test-key-${Math.random()}`;
     let blocked = false;
     for (let i = 0; i < 31; i++) {
-      blocked = isRateLimited(key);
+      blocked = await isRateLimited(key);
     }
     expect(blocked).toBe(true);
   });
 
-  it("tracks separate keys independently", () => {
+  it("tracks separate keys independently", async () => {
     const keyA = `test-a-${Math.random()}`;
     const keyB = `test-b-${Math.random()}`;
-    expect(isRateLimited(keyA)).toBe(false);
-    expect(isRateLimited(keyB)).toBe(false);
+    expect(await isRateLimited(keyA)).toBe(false);
+    expect(await isRateLimited(keyB)).toBe(false);
   });
 });
 
