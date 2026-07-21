@@ -554,23 +554,33 @@ add-to-cart is caught regardless of which mechanism the theme/button uses.
 **Labels:** bug, storefront
 **Milestone:** M4 Bucketing & Tracking
 
-Clicking **"Buy it now"** (Shopify's accelerated checkout button) bypassed
+Clicking **"Buy it now"** (Shopify's dynamic checkout button) bypassed
 both add-to-cart detectors, since it uses a direct-to-checkout path that
 never calls `/cart/add`. Purchases made this way weren't tagged with the
 experiment/variant/visitor attribute, so the `orders/paid` webhook had
 nothing to attribute them to -- these conversions were invisible to
 results.
 
-**Fix:** For PURCHASE-goal experiments, `tagCartForPurchaseAttribution` is
-now called immediately at impression time (as soon as a visitor is
-bucketed into a variant), instead of waiting for an add-to-cart signal.
-Since a cart attribute survives regardless of which checkout path a
-visitor eventually takes, this closes the "Buy it now" gap and any other
-untracked checkout entry point in one change, at the cost of tagging some
-carts that never convert (harmless inert metadata, not a false event).
-ADD_TO_CART-goal experiments are unaffected -- those still rely on the
-fetch/form add-to-cart detectors, since that goal is specifically about
-the add-to-cart action itself.
+**First fix attempt (partial):** moved `tagCartForPurchaseAttribution` to
+fire immediately at impression time instead of waiting for an
+add-to-cart signal, on the theory that a cart attribute would survive
+regardless of checkout path. Verified via DevTools that the cart *was*
+tagged correctly before checkout -- but a live "Buy it now" test order
+still landed with zero note attributes. Root cause: Shopify's dynamic
+checkout buttons don't use the regular cart at all -- they construct an
+entirely separate, standalone checkout session scoped to just that one
+item, so nothing tagged on the persistent cart is ever visible to them.
+Tagging the cart earlier couldn't fix a checkout path that never reads
+the cart in the first place.
+
+**Actual fix:** hide dynamic checkout buttons (`.shopify-payment-button`,
+the container Shopify's own script renders "Buy it now"/Shop Pay/etc.
+into on virtually every theme) whenever a PURCHASE-goal experiment is
+active, forcing visitors through the trackable Add to cart -> Checkout
+path instead. The impression-time cart tagging is kept, since it's still
+correct and covers checkout paths that *do* read the cart (including
+add-to-cart flows we don't have explicit detectors for). ADD_TO_CART-goal
+experiments are unaffected by either change.
 
 ---
 

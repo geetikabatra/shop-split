@@ -132,8 +132,9 @@
   // Tags the cart with this visitor's assignment so the orders/paid webhook
   // can attribute the eventual order back to the right variant. Called at
   // impression time (see initBlock), not on an add-to-cart signal, so it
-  // covers every checkout path -- including "Buy it now" and other
-  // accelerated checkouts that don't go through /cart/add.
+  // covers every checkout path that actually uses this cart -- which
+  // notably excludes dynamic checkout buttons (see
+  // hideDynamicCheckoutButtons below).
 
   function tagCartForPurchaseAttribution(experimentId, variantId, visitorId) {
     var attributes = {};
@@ -145,6 +146,20 @@
       body: JSON.stringify({ attributes: attributes }),
       keepalive: true,
     }).catch(function () {});
+  }
+
+  // Shopify renders dynamic checkout buttons ("Buy it now", Shop Pay, etc.)
+  // inside a container with this class across virtually every theme
+  // (Shopify's own script populates it, not the theme). The container
+  // exists in the initial HTML even before that script runs, so hiding it
+  // works regardless of injection timing.
+  var DYNAMIC_CHECKOUT_BUTTON_SELECTOR = ".shopify-payment-button";
+
+  function hideDynamicCheckoutButtons() {
+    var buttons = document.querySelectorAll(DYNAMIC_CHECKOUT_BUTTON_SELECTOR);
+    for (var i = 0; i < buttons.length; i++) {
+      buttons[i].style.display = "none";
+    }
   }
 
   // ---- add-to-cart detection ----
@@ -261,12 +276,21 @@
         });
       } else if (experiment.goal === "PURCHASE") {
         // Tag the cart as soon as the visitor is bucketed, rather than
-        // waiting for an add-to-cart signal. "Buy it now" and other
-        // accelerated-checkout paths don't reliably go through /cart/add
-        // at all, so waiting for that signal misses them entirely. Tagging
-        // early means some carts that never convert get tagged too, but
-        // that's just inert metadata -- not a false event.
+        // waiting for an add-to-cart signal, so any checkout that actually
+        // uses this cart carries the attribution through. Tagging early
+        // means some carts that never convert get tagged too, but that's
+        // just inert metadata -- not a false event.
         tagCartForPurchaseAttribution(experiment.id, variant.id, visitorId);
+
+        // Dynamic checkout buttons ("Buy it now", Shop Pay, etc.) build an
+        // entirely separate checkout session that never references the
+        // cart above, so tagging the cart can't reach them -- confirmed by
+        // testing: the cart was correctly tagged, but the resulting order
+        // still had zero note attributes. Hiding the button forces
+        // visitors through the trackable Add to cart -> Checkout path
+        // instead, which is the only way to guarantee attribution here
+        // short of intercepting Shopify's own checkout construction.
+        hideDynamicCheckoutButtons();
       }
     });
   }
