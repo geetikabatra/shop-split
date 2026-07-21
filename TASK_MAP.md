@@ -158,6 +158,30 @@ limiter behavior, and getClientIp header parsing.
 
 ---
 
+## Production readiness pass (between Milestones 7 and 8)
+
+Worked through most of the production-readiness backlog from
+GITHUB_ISSUES.md before continuing to Milestone 8, since QA on an app
+that isn't production-shaped yet has limited value. Done:
+- Anti-flicker storefront handling
+- GitHub Actions scheduled event cleanup
+- Sentry error monitoring (code-only, no account yet)
+- afterAuth failure handling (partial -- see GITHUB_ISSUES.md for the
+  real open gap around stale-session detection, which is a library
+  limitation we can't fix from application code)
+- Redis-backed rate limiting, **verified against a real local Redis
+  container** (inspected the key/TTL/count directly via redis-cli)
+- Postgres migration, **verified against a real local Postgres
+  container** (full test suite passed against it, not just SQLite)
+
+Still open: deployment hosting (deliberately skipped -- real
+cost/provider decision, not made unilaterally), connection pooling and
+concurrent-load testing (need a real production host to be meaningful).
+Multi-tenant scoping audit is done (see GITHUB_ISSUES.md's security
+review, completed earlier in Milestone 7).
+
+---
+
 ## Dependency notes
 - Milestone 1 blocks 2, 3, 4.
 - Milestone 3 and 4 can run in parallel once 1 is done.

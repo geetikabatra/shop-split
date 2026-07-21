@@ -672,24 +672,34 @@ this app, not from initial planning.
 
 ---
 
-### Migrate the database from SQLite to Postgres
+### [PARTIALLY RESOLVED] Migrate the database from SQLite to Postgres
 **Labels:** backend, production-readiness
 
-The dev datasource is SQLite (`prisma/schema.prisma`), which was the
+The dev datasource was SQLite (`prisma/schema.prisma`), which was the
 right call for zero-setup local development but doesn't hold up for a
 real multi-tenant production deployment: no concurrent-write safety
 under real load, no managed backups, and it lives on a single instance's
 disk (incompatible with any horizontally-scaled or ephemeral-filesystem
 host).
 
-**Acceptance criteria**
-- [ ] `datasource db` provider switched to `postgresql`, URL from
-      `env("DATABASE_URL")`
-- [ ] Migrations regenerated/verified against a real Postgres instance
-- [ ] Connection pooling configured appropriately for the target host
-      (e.g. PgBouncer or the host's built-in pooler)
+**Fix:** `datasource db` now uses `provider = "postgresql"` with
+`url = env("DATABASE_URL")`. Migrations regenerated fresh against a real
+local Postgres (`postgres:16-alpine` via the new `docker-compose.yml`) --
+old SQLite-dialect migrations were deleted and replaced with one clean
+`init_postgres` migration, since Prisma doesn't support switching a
+provider mid-history. **Verified for real**, not just written blind: the
+full 36-test suite (covering cascading deletes, unique constraints,
+groupBy aggregations, transactions) passed against the actual Postgres
+container. `README.md` and `.env.example` updated for the new local dev
+workflow (`docker compose up -d` before `shopify app dev`).
+
+**Still open (needs a real production host, not local Docker):**
+- [ ] Connection pooling configured for the target host (e.g. PgBouncer
+      or the host's built-in pooler) -- not relevant until deployment is
+      decided (see the deployment-hardening issue)
 - [ ] `Assignment`/`Event` write-heavy paths spot-checked for lock
-      contention under concurrent load
+      contention under real concurrent production load (local
+      single-request testing doesn't exercise this)
 
 ---
 
