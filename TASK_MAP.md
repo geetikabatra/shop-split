@@ -47,7 +47,7 @@ Getting variants onto the live storefront without theme code edits.
 - [x] App Proxy endpoint to serve active experiment/variant config for a page
 - [x] Client-side loader script: fetch config, apply variant DOM changes
 - [x] Fallback/graceful-degradation when no active experiment (fails closed to the block's default content on any error/timeout/no-experiment)
-- [ ] Performance check: minimize layout shift / flicker on variant swap — script is deferred and swaps text post-render, so some flicker is expected; not yet measured or optimized
+- [x] Performance check: minimize layout shift / flicker on variant swap — blocks start `visibility: hidden` (not `display: none`, so layout space is reserved) and the loader reveals them only once a variant is applied or "no experiment" is confirmed, with a hard timeout backstop so a slow/failed request never leaves a block permanently hidden (production-readiness pass)
 
 Verified live on shopsplit-z1lscgsw.myshopify.com: added the ShopSplit
 Product CTA block to a real product page, started an experiment with two

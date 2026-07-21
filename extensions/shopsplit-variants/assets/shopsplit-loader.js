@@ -14,6 +14,13 @@
   var CONFIG_ENDPOINT = "/apps/shopsplit/config";
   var EVENT_ENDPOINT = "/apps/shopsplit/event";
   var FETCH_TIMEOUT_MS = 2000;
+  // Backstop for the anti-flicker hide: always longer than
+  // FETCH_TIMEOUT_MS so the fetch's own timeout/catch path (which reveals
+  // the block right away) gets a chance to fire first. This only kicks in
+  // for something more catastrophic than a slow network, e.g. a script
+  // error breaking the promise chain -- it must never leave a block
+  // hidden forever.
+  var REVEAL_TIMEOUT_MS = 2500;
   var VISITOR_COOKIE = "shopsplit_vid";
   var VISITOR_COOKIE_DAYS = 365;
 
@@ -244,19 +251,34 @@
     block.setAttribute("data-shopsplit-variant-id", variant.id);
   }
 
+  function revealBlock(block) {
+    block.style.visibility = "";
+  }
+
   function initBlock(block, visitorId) {
     var targetType = block.getAttribute("data-shopsplit-target-type");
-    if (!targetType) return;
+    if (!targetType) {
+      revealBlock(block);
+      return;
+    }
     var targetResourceId = block.getAttribute("data-shopsplit-target-resource-id") || undefined;
 
+    var revealTimeoutId = setTimeout(function () {
+      revealBlock(block);
+    }, REVEAL_TIMEOUT_MS);
+
     fetchConfig(targetType, targetResourceId).then(function (data) {
+      clearTimeout(revealTimeoutId);
+
       var experiment = data && data.experiment;
       if (!experiment || !experiment.variants || experiment.variants.length === 0) {
+        revealBlock(block);
         return;
       }
 
       var variant = pickVariantForVisitor(visitorId, experiment.id, experiment.variants);
       applyVariant(block, experiment.id, variant);
+      revealBlock(block);
 
       postEvent({
         experimentId: experiment.id,

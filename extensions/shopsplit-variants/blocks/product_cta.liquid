@@ -2,10 +2,17 @@
   Renders the control copy for a product-page experiment (e.g. CTA or price
   text). shopsplit-loader.js swaps in the assigned variant's content if an
   experiment is RUNNING for this product; otherwise this default stays put.
+
+  Starts hidden (visibility, not display, so the layout space is reserved
+  and nothing shifts) to avoid a flash of control content before the
+  variant is decided. The loader script reveals it once it knows what to
+  show, with a hard timeout fallback so a slow/failed request never
+  leaves it hidden.
 {% endcomment %}
 <div
   data-shopsplit-block
   data-shopsplit-target-type="PRODUCT_PAGE"
+  style="visibility: hidden;"
   {% if product %}
     data-shopsplit-target-resource-id="gid://shopify/Product/{{ product.id }}"
   {% endif %}
