@@ -137,11 +137,11 @@ through a loader one at a time.
 limiter behavior, and getClientIp header parsing.
 
 ## Milestone 8 — Testing & QA
-- [ ] Unit tests: bucketing determinism, allocation math, stats engine
-- [ ] Integration tests: experiment CRUD, webhook handlers
-- [ ] E2E test: create experiment → visit storefront → verify variant + event recorded
-- [ ] Load test App Proxy endpoint (storefront traffic spikes)
-- [ ] Manual QA across 2–3 popular free themes (Dawn, etc.)
+- [x] Unit tests: bucketing determinism, allocation math, stats engine — bucketing determinism was the real gap (previously only verified via ad-hoc `node -e` scripts during live debugging); `app/utils/shopsplit-loader.script.test.ts` now loads and executes the actual shipped script in jsdom
+- [x] Integration tests: experiment CRUD, webhook handlers — route-level tests mocking only the Shopify SDK auth boundary, everything below runs for real against the test database
+- [x] E2E test: create experiment → visit storefront → verify variant + event recorded — `app/models/full-pipeline.e2e.test.ts` simulates the full model-layer pipeline; genuine manual E2E (real browser, real dev store, real Postgres) was also done extensively earlier this session and is what actually caught the real bugs (webhook registration, Buy it now gap) that a simulation can't reach
+- [x] Load test App Proxy endpoint (storefront traffic spikes) — `scripts/load-test.ts` (`npm run load-test`), hits the real getActiveExperimentForTarget/recordEvent model-layer functions with real concurrency against real Postgres (skips HTTP/HMAC layer deliberately -- that's cheap, the database is the actual bottleneck). Results at concurrency 200: read path ~9,100 req/s (p50 19ms, p99 60ms), write path ~2,800 req/s (p50 71ms, p99 81ms), zero errors at either concurrency tested (50 and 200). Throughput plateaus rather than degrading -- looks like single-connection saturation, not an instability problem, but only tested against one local Postgres instance from one process; real production capacity depends on connection pooling sized for the target host (see GITHUB_ISSUES.md)
+- [ ] Manual QA across 2–3 popular free themes (Dawn, etc.) — needs your browser; see the checklist
 
 ## Milestone 9 — App Store Submission & Launch
 - [ ] App listing copy, screenshots, demo video

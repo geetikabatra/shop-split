@@ -19,7 +19,8 @@
     "vite": "vite",
     "typecheck": "react-router typegen && tsc --noEmit",
     "test": "vitest run",
-    "cleanup-events": "tsx scripts/cleanup-events.ts"
+    "cleanup-events": "tsx scripts/cleanup-events.ts",
+    "load-test": "tsx scripts/load-test.ts"
   },
   "type": "module",
   "engines": {
