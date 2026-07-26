@@ -21,7 +21,7 @@ Foundation: repo, Shopify CLI app, dev store, CI.
 - [x] Configure `shopify.app.toml` (scopes, webhooks, app proxy) — scopes/webhooks present from scaffold; app proxy path still needs setting for Milestone 3
 - [x] Set up Prisma + Postgres (dev via SQLite or Docker Postgres) — SQLite dev datasource in place; swap to Postgres before production deploy
 - [ ] Set up dev store + test theme for local testing — needs interactive `shopify app dev` run by you (opens browser to pick/create a dev store)
-- [ ] CI pipeline (lint, typecheck, test) on PR
+- [x] CI pipeline (lint, typecheck, test) on PR — `.github/workflows/ci.yml`, runs against a real ephemeral Postgres service container (matches the `postgres:16-alpine` used locally); verified locally end-to-end (fresh `prisma generate` + `migrate deploy` + lint + typecheck + full 55-test suite, ~3s test runtime)
 
 ## Milestone 1 — Core Data Model & Admin API
 The schema and server-side API everything else builds on.
