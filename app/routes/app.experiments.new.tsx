@@ -1,5 +1,7 @@
+import { useState } from "react";
 import type { ActionFunctionArgs } from "react-router";
 import { Form, redirect, useActionData, useNavigation } from "react-router";
+import { useAppBridge } from "@shopify/app-bridge-react";
 import { authenticate, GROWTH_PLAN } from "../shopify.server";
 import { getOrCreateShop } from "../models/shop.server";
 import {
@@ -51,6 +53,18 @@ export default function NewExperiment() {
   const navigation = useNavigation();
   const actionData = useActionData<typeof action>();
   const isSubmitting = navigation.state === "submitting";
+  const shopify = useAppBridge();
+  const [selectedProduct, setSelectedProduct] = useState<{ id: string; title: string } | null>(
+    null,
+  );
+
+  const pickProduct = async () => {
+    const selection = await shopify.resourcePicker({ type: "product", action: "select" });
+    const product = selection?.[0];
+    if (product) {
+      setSelectedProduct({ id: product.id, title: product.title });
+    }
+  };
 
   return (
     <s-page heading="Create experiment">
@@ -83,11 +97,28 @@ export default function NewExperiment() {
               <s-option value="BANNER">Banner</s-option>
             </s-select>
 
-            <s-text-field
-              name="targetResourceId"
-              label="Target product ID (optional)"
-              details="Leave blank to target a site-wide banner, or paste a product GID for a product-page test."
-            />
+            <input type="hidden" name="targetResourceId" value={selectedProduct?.id ?? ""} />
+            <s-stack direction="inline" gap="base" alignItems="center">
+              <s-button type="button" onClick={pickProduct}>
+                {selectedProduct ? "Change product" : "Choose product"}
+              </s-button>
+              {selectedProduct ? (
+                <>
+                  <s-text>{selectedProduct.title}</s-text>
+                  <s-button
+                    type="button"
+                    variant="tertiary"
+                    onClick={() => setSelectedProduct(null)}
+                  >
+                    Remove
+                  </s-button>
+                </>
+              ) : (
+                <s-text color="subdued">
+                  No product selected — leave unselected for a site-wide banner.
+                </s-text>
+              )}
+            </s-stack>
 
             <s-select name="goal" label="Goal metric" required>
               <s-option value="ADD_TO_CART">Add to cart</s-option>

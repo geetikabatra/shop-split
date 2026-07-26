@@ -37,7 +37,7 @@ Merchant-facing embedded app screens.
 - [x] Experiments list page (Polaris web components table, status badges)
 - [x] Create/edit experiment flow (target element, goal metric); variant setup happens on the detail page
 - [x] Variant editor (name, control flag, weight, free-text content override)
-- [ ] Product/page picker (Shopify resource picker via App Bridge) — currently a plain text field for product GID
+- [x] Product/page picker (Shopify resource picker via App Bridge) — `app/routes/app.experiments.new.tsx` now calls `shopify.resourcePicker({ type: "product", action: "select" })` via `useAppBridge`, storing the returned GID in a hidden `targetResourceId` field; verified via typecheck/lint/full test suite (not yet exercised in a live embedded-admin browser session, which needs an interactive `shopify app dev` run)
 - [x] Start/pause/stop experiment controls + confirmation states (state machine enforced server-side; no confirm-dialog yet on Complete)
 - [x] Empty state for zero experiments — onboarding walkthrough still pending
 
