@@ -122,4 +122,66 @@ describe("webhooks.orders.paid action", () => {
     const events = await prisma.event.findMany({ where: { experimentId, type: "PURCHASE" } });
     expect(events).toHaveLength(1);
   });
+
+  it("records a PURCHASE event from a line item property when there are no note attributes (Buy it now path)", async () => {
+    const { experimentId, variantId } = await runningExperiment(shopId);
+    mockWebhook.mockResolvedValue({
+      shop: shopDomain,
+      topic: "ORDERS_PAID",
+      payload: {
+        id: 9005,
+        total_price: "20.00",
+        note_attributes: [],
+        line_items: [
+          { properties: [{ name: `_shopsplit_${experimentId}`, value: `${variantId}:visitor-3` }] },
+        ],
+      },
+    });
+
+    await action({ request: webhookRequest() } as never);
+
+    const events = await prisma.event.findMany({ where: { experimentId, type: "PURCHASE" } });
+    expect(events).toHaveLength(1);
+    expect(events[0].orderId).toBe("9005");
+    expect(events[0].orderValue).toBe(20);
+  });
+
+  it("skips a malformed line item property gracefully", async () => {
+    const { experimentId } = await runningExperiment(shopId);
+    mockWebhook.mockResolvedValue({
+      shop: shopDomain,
+      topic: "ORDERS_PAID",
+      payload: {
+        id: 9006,
+        total_price: "10.00",
+        line_items: [{ properties: [{ name: `_shopsplit_${experimentId}`, value: "not-a-valid-pair" }] }],
+      },
+    });
+
+    const response = await action({ request: webhookRequest() } as never);
+    expect(response.status).toBe(200);
+    const events = await prisma.event.findMany({ where: { experimentId, type: "PURCHASE" } });
+    expect(events).toHaveLength(0);
+  });
+
+  it("does not double-record when both the note attribute and line item property tag the same order", async () => {
+    const { experimentId, variantId } = await runningExperiment(shopId);
+    mockWebhook.mockResolvedValue({
+      shop: shopDomain,
+      topic: "ORDERS_PAID",
+      payload: {
+        id: 9007,
+        total_price: "30.00",
+        note_attributes: [{ name: `shopsplit_${experimentId}`, value: `${variantId}:visitor-4` }],
+        line_items: [
+          { properties: [{ name: `_shopsplit_${experimentId}`, value: `${variantId}:visitor-4` }] },
+        ],
+      },
+    });
+
+    await action({ request: webhookRequest() } as never);
+
+    const events = await prisma.event.findMany({ where: { experimentId, type: "PURCHASE" } });
+    expect(events).toHaveLength(1);
+  });
 });

@@ -155,6 +155,46 @@
     }).catch(function () {});
   }
 
+  // Second, independent attribution channel for PURCHASE-goal experiments.
+  // Cart attributes (above) never reach an order placed through a dynamic
+  // checkout button ("Buy it now", Shop Pay) -- that flow builds a
+  // standalone checkout session that doesn't read the persistent cart at
+  // all (confirmed live: the cart was tagged correctly, but the resulting
+  // order still had zero note attributes). Dynamic checkout buttons are
+  // rendered by Shopify's own script from the *current state of the
+  // product form* (variant, quantity, and any hidden `properties[...]`
+  // inputs), so tagging the form itself -- not the cart -- is the one
+  // channel with a real chance of surviving that path. A leading
+  // underscore keeps the property hidden from the customer-facing
+  // cart/checkout UI (a documented Shopify convention) while it still
+  // lands in the orders/paid webhook payload's line_items[].properties.
+  //
+  // Not yet verified live whether the dynamic checkout button actually
+  // reads a property added to the form after its own script has already
+  // parsed it -- hideDynamicCheckoutButtons() below stays in place as the
+  // safe default until that's confirmed on a real dev store (see the
+  // "True Buy it now support" issue in GITHUB_ISSUES.md).
+  var LINE_ITEM_PROPERTY_PREFIX = "_shopsplit_";
+  var PRODUCT_FORM_SELECTOR = 'form[action*="/cart/add"]';
+
+  function tagLineItemPropertiesForPurchaseAttribution(experimentId, variantId, visitorId) {
+    if (window.__shopsplitPropertiesTagged) return;
+    window.__shopsplitPropertiesTagged = true;
+
+    var propertyName = "properties[" + LINE_ITEM_PROPERTY_PREFIX + experimentId + "]";
+    var propertyValue = variantId + ":" + visitorId;
+    var forms = document.querySelectorAll(PRODUCT_FORM_SELECTOR);
+
+    for (var i = 0; i < forms.length; i++) {
+      if (forms[i].querySelector('input[name="' + propertyName + '"]')) continue;
+      var input = document.createElement("input");
+      input.type = "hidden";
+      input.name = propertyName;
+      input.value = propertyValue;
+      forms[i].appendChild(input);
+    }
+  }
+
   // Shopify renders dynamic checkout buttons ("Buy it now", Shop Pay, etc.)
   // inside a container with this class across virtually every theme
   // (Shopify's own script populates it, not the theme). The container
@@ -304,14 +344,18 @@
         // just inert metadata -- not a false event.
         tagCartForPurchaseAttribution(experiment.id, variant.id, visitorId);
 
-        // Dynamic checkout buttons ("Buy it now", Shop Pay, etc.) build an
-        // entirely separate checkout session that never references the
-        // cart above, so tagging the cart can't reach them -- confirmed by
-        // testing: the cart was correctly tagged, but the resulting order
-        // still had zero note attributes. Hiding the button forces
-        // visitors through the trackable Add to cart -> Checkout path
-        // instead, which is the only way to guarantee attribution here
-        // short of intercepting Shopify's own checkout construction.
+        // Second channel via the product form's line-item properties (see
+        // the comment above tagLineItemPropertiesForPurchaseAttribution)
+        // in case this reaches a dynamic-checkout-button order the cart
+        // attribute above can't.
+        tagLineItemPropertiesForPurchaseAttribution(experiment.id, variant.id, visitorId);
+
+        // Still hidden as the safe default: even with the line-item
+        // property channel above, it's unconfirmed live whether a dynamic
+        // checkout button actually picks up a property added after its
+        // own script parsed the form. Forcing the trackable Add to cart ->
+        // Checkout path is the only *guaranteed* attribution here until
+        // that's verified on a real dev store.
         hideDynamicCheckoutButtons();
       }
     });

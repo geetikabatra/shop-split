@@ -635,7 +635,7 @@ experiments are unaffected by either change.
 
 ---
 
-### [OPEN] True "Buy it now" support (without hiding the button)
+### [PARTIALLY RESOLVED] True "Buy it now" support (without hiding the button)
 **Labels:** bug, storefront
 **Milestone:** M4 Bucketing & Tracking
 
@@ -648,17 +648,61 @@ experiment, which can itself suppress conversions for reasons that have
 nothing to do with the A/B test being run -- undermining the very thing
 the experiment is trying to measure cleanly.
 
+**Investigation:** dynamic checkout buttons are rendered by Shopify's own
+script from the *current state of the product form* (variant, quantity,
+and any hidden `properties[...]` inputs) at click time, then build a
+standalone checkout session that never reads the persistent cart -- which
+is why the cart-attribute channel can't reach them. Line item properties
+travel with the form/line item itself rather than the cart, so they're
+the one channel with a real chance of surviving that path, and they're a
+documented, no-theme-code mechanism (a leading `_` hides a property from
+the customer-facing cart/checkout UI while it still lands in the
+`orders/paid` webhook's `line_items[].properties`). No Storefront-API
+interception or Checkout Extensibility path was needed.
+
+**Implemented:** `shopsplit-loader.js` now runs a second, independent
+tagging step alongside the existing cart-attribute one --
+`tagLineItemPropertiesForPurchaseAttribution()` injects a hidden
+`properties[_shopsplit_<experimentId>]` input into every `form[action*="/cart/add"]`
+on the page at impression time. `webhooks.orders.paid.tsx` now reads
+attribution from both `note_attributes` (existing) and
+`line_items[].properties` (new) through the same `recordEvent` call;
+since that call is already deduped on `(orderId, type)`, an order tagged
+on both channels (the normal path) still produces exactly one PURCHASE
+event, not two -- covered by a new test. 5 new tests total (67 overall):
+2 in `shopsplit-loader.script.test.ts` (property gets injected for
+PURCHASE goal, not for ADD_TO_CART goal) and 3 in
+`webhooks.orders.paid.test.ts` (line-item-only attribution, malformed
+line-item value skipped, no double-record when both channels tag the
+same order).
+
+**Still open -- why this isn't fully resolved yet:** it's unverified
+*live* whether Shopify's dynamic checkout button actually reads a
+property added to the form by our script after its own script has
+already parsed the form once. That can only be confirmed with a real
+click on a real dev store, which wasn't done this session.
+`hideDynamicCheckoutButtons()` therefore stays in place as the safe
+default -- unchanged from before.
+
 **Acceptance criteria**
-- [ ] Investigate whether Shopify's dynamic checkout button flow can be
+- [x] Investigate whether Shopify's dynamic checkout button flow can be
       intercepted or tagged before it constructs its standalone checkout
-      session (e.g. via the Storefront API, checkout `?attributes[]=`
-      query params on however the button builds its URL, or Shopify's
-      Checkout Kit APIs)
-- [ ] If no reliable client-side mechanism exists, evaluate whether this
-      requires Shopify Plus / Checkout Extensibility (server-side
-      Functions) to solve properly
-- [ ] Until solved, keep the button-hiding workaround as the safe default
-      rather than leaving purchases untracked
+      session -- yes, via line item properties on the product form (see
+      above); no Storefront API/Checkout Kit interception needed
+- [x] If no reliable client-side mechanism exists, evaluate whether this
+      requires Shopify Plus / Checkout Extensibility -- not applicable,
+      a client-side mechanism does exist (pending live confirmation)
+- [x] Until solved, keep the button-hiding workaround as the safe default
+      rather than leaving purchases untracked -- unchanged
+
+**Next step (needs your dev store, not code):** on
+shopsplit-z1lscgsw.myshopify.com, temporarily comment out the
+`hideDynamicCheckoutButtons()` call, start a PURCHASE-goal experiment,
+click "Buy it now" through to a real (Bogus Gateway) order, and check
+whether `line_items[].properties` on that order actually carries the
+`_shopsplit_<experimentId>` tag. If yes, remove the hide and close this
+out for real; if no, this issue stays open and probably does need the
+Plus/Checkout Extensibility path.
 
 ---
 

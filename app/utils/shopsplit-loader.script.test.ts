@@ -37,7 +37,8 @@ function makeFetchMock(goal: string) {
 const BLOCK_HTML =
   '<div data-shopsplit-block data-shopsplit-target-type="PRODUCT_PAGE" style="visibility: hidden;">' +
   '<span data-shopsplit-content>control text</span>' +
-  "</div>";
+  "</div>" +
+  '<form action="/cart/add" method="post"><input type="hidden" name="id" value="123" /></form>';
 
 /** Runs the real script in a fresh jsdom window and waits for it to settle. */
 async function runLoaderOnce(existingCookie: string | undefined, goal = "ADD_TO_CART") {
@@ -62,10 +63,16 @@ async function runLoaderOnce(existingCookie: string | undefined, goal = "ADD_TO_
 
   const block = dom.window.document.querySelector("[data-shopsplit-block]")!;
   const cookieMatch = dom.window.document.cookie.match(/shopsplit_vid=([^;]+)/);
+  const form = dom.window.document.querySelector('form[action*="/cart/add"]')!;
+  const propertyInput = form.querySelector('input[name^="properties[_shopsplit_"]');
   return {
     variantId: block.getAttribute("data-shopsplit-variant-id"),
     visitorId: cookieMatch ? decodeURIComponent(cookieMatch[1]) : null,
     visibility: (block as HTMLElement).style.visibility,
+    lineItemPropertyName: propertyInput ? propertyInput.getAttribute("name") : null,
+    lineItemPropertyValue: propertyInput
+      ? (propertyInput as HTMLInputElement).value
+      : null,
   };
 }
 
@@ -110,4 +117,17 @@ describe("shopsplit-loader.js bucketing", () => {
     },
     15000,
   );
+});
+
+describe("shopsplit-loader.js PURCHASE-goal line item property tagging", () => {
+  it("tags the product form's line item properties for a PURCHASE-goal experiment", async () => {
+    const result = await runLoaderOnce(undefined, "PURCHASE");
+    expect(result.lineItemPropertyName).toBe(`properties[_shopsplit_${EXPERIMENT_ID}]`);
+    expect(result.lineItemPropertyValue).toBe(`${result.variantId}:${result.visitorId}`);
+  });
+
+  it("does not tag line item properties for an ADD_TO_CART-goal experiment", async () => {
+    const result = await runLoaderOnce(undefined, "ADD_TO_CART");
+    expect(result.lineItemPropertyName).toBeNull();
+  });
 });
