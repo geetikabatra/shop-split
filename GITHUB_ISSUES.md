@@ -635,7 +635,7 @@ experiments are unaffected by either change.
 
 ---
 
-### [PARTIALLY RESOLVED] True "Buy it now" support (without hiding the button)
+### [RESOLVED] True "Buy it now" support (without hiding the button)
 **Labels:** bug, storefront
 **Milestone:** M4 Bucketing & Tracking
 
@@ -676,13 +676,35 @@ PURCHASE goal, not for ADD_TO_CART goal) and 3 in
 line-item value skipped, no double-record when both channels tag the
 same order).
 
-**Still open -- why this isn't fully resolved yet:** it's unverified
-*live* whether Shopify's dynamic checkout button actually reads a
-property added to the form by our script after its own script has
-already parsed the form once. That can only be confirmed with a real
-click on a real dev store, which wasn't done this session.
-`hideDynamicCheckoutButtons()` therefore stays in place as the safe
-default -- unchanged from before.
+**Verified live** on shopsplit-z1lscgsw.myshopify.com: started a
+PURCHASE-goal experiment ("Product page text", targeting a real
+product), temporarily left the dynamic checkout button visible, and
+clicked "Buy it now" through to a real order (#1016, Bogus Gateway).
+Queried the resulting order directly via Admin GraphQL:
+
+- `order.customAttributes` (cart-level): `[]` -- empty, confirming
+  "Buy it now" genuinely never touches the persistent cart, exactly as
+  suspected.
+- `order.lineItems[0].customAttributes`: `_shopsplit_<experimentId>` =
+  `<variantId>:<visitorId>`, matching the treatment variant our own
+  `Event` table recorded the PURCHASE against.
+
+So the line-item-property channel is what carried attribution through
+for this order; the cart channel had nothing to give it. That's direct
+proof the mechanism works, not just a plausible theory. Removed
+`hideDynamicCheckoutButtons()` and its now-dead selector constant
+entirely from `shopsplit-loader.js` -- the dynamic checkout button is no
+longer hidden during PURCHASE-goal experiments. Full 67-test suite,
+typecheck, and lint all still pass after the removal.
+
+**Caveat:** verified on one store/theme/checkout for one order. The
+mechanism being tested (Shopify's own accelerated-checkout script
+reading the current product form state) is platform behavior, not
+theme-specific code, so it should generalize -- but this hasn't been
+cross-checked against another theme yet. Worth folding into the existing
+"Manual QA across popular free themes" item in Milestone 8 before public
+launch, specifically re-testing Buy it now attribution on each theme
+checked.
 
 **Acceptance criteria**
 - [x] Investigate whether Shopify's dynamic checkout button flow can be
@@ -690,19 +712,52 @@ default -- unchanged from before.
       session -- yes, via line item properties on the product form (see
       above); no Storefront API/Checkout Kit interception needed
 - [x] If no reliable client-side mechanism exists, evaluate whether this
-      requires Shopify Plus / Checkout Extensibility -- not applicable,
-      a client-side mechanism does exist (pending live confirmation)
+      requires Shopify Plus / Checkout Extensibility -- not applicable, a
+      client-side mechanism works and is verified live
 - [x] Until solved, keep the button-hiding workaround as the safe default
-      rather than leaving purchases untracked -- unchanged
+      rather than leaving purchases untracked -- superseded: it's solved,
+      hiding has been removed
 
-**Next step (needs your dev store, not code):** on
-shopsplit-z1lscgsw.myshopify.com, temporarily comment out the
-`hideDynamicCheckoutButtons()` call, start a PURCHASE-goal experiment,
-click "Buy it now" through to a real (Bogus Gateway) order, and check
-whether `line_items[].properties` on that order actually carries the
-`_shopsplit_<experimentId>` tag. If yes, remove the hide and close this
-out for real; if no, this issue stays open and probably does need the
-Plus/Checkout Extensibility path.
+---
+
+### [RESOLVED] Colocated `*.test.ts` files crashed the real dev/production server
+**Labels:** bug, backend, production-readiness
+
+Found while setting up the live "Buy it now" verification above:
+`shopify app dev` would boot and the tunnel would come up cleanly, but
+every request into the app silently never reached the database --
+`Session`/`Shop` tables stayed empty no matter what was clicked. The
+actual symptom only surfaced once a webhook delivery failed loudly
+enough to show a stack trace: `Vitest mocker was not initialized in
+this environment. vi.queueMock() is forbidden`, thrown from inside
+`webhooks.orders.paid.test.ts`.
+
+**Root cause:** `app/routes.ts` called `flatRoutes()` with no
+`ignoredRouteFiles`, which defaults to `[]`. React Router's file-based
+routing convention swept up every file in `app/routes/`, including the
+colocated test files (`webhooks.orders.paid.test.ts`,
+`app.experiments.new.test.ts`, `proxy.event.test.ts`), and bundled them
+into the real server build. Those files call `vi.mock(...)` at module
+scope, which only works inside Vitest's own runtime -- evaluating that
+module under the actual dev/production server threw immediately,
+apparently crashing (or at least failing to complete) most requests,
+not just the one that happened to surface the error message.
+
+**Fix:** `app/routes.ts` now passes
+`ignoredRouteFiles: ["**/*.test.ts", "**/*.test.tsx"]`. Verified: full
+67-test suite, typecheck, and lint still pass, and -- the real test --
+`shopify app dev` restarted cleanly and requests actually started
+reaching Postgres (`Session`/`Shop` rows appeared for the first time).
+
+**Why this matters beyond today:** this wasn't a "session's dev
+environment was misconfigured" problem -- the same `flatRoutes()` call
+runs in a real production build (`react-router build` /
+`react-router-serve`), so this would have broken the app for real
+merchants identically, likely presenting as broad, hard-to-diagnose
+request failures with no obvious cause (exactly what happened here).
+Worth a quick sanity check before Milestone 9 submission: confirm a
+production build's route manifest doesn't include any `*.test.ts`
+paths.
 
 ---
 

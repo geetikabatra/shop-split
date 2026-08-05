@@ -169,11 +169,12 @@
   // cart/checkout UI (a documented Shopify convention) while it still
   // lands in the orders/paid webhook payload's line_items[].properties.
   //
-  // Not yet verified live whether the dynamic checkout button actually
-  // reads a property added to the form after its own script has already
-  // parsed it -- hideDynamicCheckoutButtons() below stays in place as the
-  // safe default until that's confirmed on a real dev store (see the
-  // "True Buy it now support" issue in GITHUB_ISSUES.md).
+  // Confirmed live on shopsplit-z1lscgsw.myshopify.com: a real "Buy it
+  // now" order's line_items[].customAttributes carried the
+  // _shopsplit_<experimentId> tag through to the correct variant, while
+  // the order's cart-level customAttributes were empty, exactly as
+  // predicted. This is what makes it safe to stop hiding the dynamic
+  // checkout button below (see GITHUB_ISSUES.md).
   var LINE_ITEM_PROPERTY_PREFIX = "_shopsplit_";
   var PRODUCT_FORM_SELECTOR = 'form[action*="/cart/add"]';
 
@@ -192,20 +193,6 @@
       input.name = propertyName;
       input.value = propertyValue;
       forms[i].appendChild(input);
-    }
-  }
-
-  // Shopify renders dynamic checkout buttons ("Buy it now", Shop Pay, etc.)
-  // inside a container with this class across virtually every theme
-  // (Shopify's own script populates it, not the theme). The container
-  // exists in the initial HTML even before that script runs, so hiding it
-  // works regardless of injection timing.
-  var DYNAMIC_CHECKOUT_BUTTON_SELECTOR = ".shopify-payment-button";
-
-  function hideDynamicCheckoutButtons() {
-    var buttons = document.querySelectorAll(DYNAMIC_CHECKOUT_BUTTON_SELECTOR);
-    for (var i = 0; i < buttons.length; i++) {
-      buttons[i].style.display = "none";
     }
   }
 
@@ -345,18 +332,11 @@
         tagCartForPurchaseAttribution(experiment.id, variant.id, visitorId);
 
         // Second channel via the product form's line-item properties (see
-        // the comment above tagLineItemPropertiesForPurchaseAttribution)
-        // in case this reaches a dynamic-checkout-button order the cart
-        // attribute above can't.
+        // the comment above tagLineItemPropertiesForPurchaseAttribution),
+        // which is what actually reaches a dynamic-checkout-button
+        // ("Buy it now") order -- verified live, see GITHUB_ISSUES.md.
+        // The dynamic checkout button itself is no longer hidden.
         tagLineItemPropertiesForPurchaseAttribution(experiment.id, variant.id, visitorId);
-
-        // Still hidden as the safe default: even with the line-item
-        // property channel above, it's unconfirmed live whether a dynamic
-        // checkout button actually picks up a property added after its
-        // own script parsed the form. Forcing the trackable Add to cart ->
-        // Checkout path is the only *guaranteed* attribution here until
-        // that's verified on a real dev store.
-        hideDynamicCheckoutButtons();
       }
     });
   }
