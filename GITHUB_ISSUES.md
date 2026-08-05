@@ -810,7 +810,7 @@ real install.
 
 ---
 
-### Multi-tenant shop-scoping audit
+### [PARTIALLY RESOLVED] Multi-tenant shop-scoping audit
 **Labels:** backend, security, production-readiness
 
 Every model query in this app is written to be scoped by `shopId`, but
@@ -819,13 +819,36 @@ filters by it), not by any structural guarantee. One missed `where`
 clause in a future change would leak one merchant's experiment data to
 another -- a serious issue for a multi-tenant app.
 
+**Fix:** the manual audit was already covered by the security review
+above (no missing `where` clause found in any query in
+`app/models/*.server.ts` or `app/routes/*.tsx`), but that was a one-time
+pass with nothing to catch a future regression. Added
+`app/models/shop-scoping.server.test.ts`: creates two shops, has shop A
+own an experiment and variants, then drives every mutating/reading model
+function -- `getExperiment`, `updateExperiment`,
+`transitionExperimentStatus`, `listVariants`, `createVariant`,
+`updateVariant`, `deleteVariant`, `computeExperimentResults`,
+`recordEvent` -- as shop B using shop A's real IDs, and asserts each is
+rejected the same way a nonexistent ID would be, with no partial side
+effects (e.g. the experiment is still `DRAFT`, the variant count didn't
+change). Also asserts `listExperiments` for shop B never includes shop
+A's rows.
+
+**Verified for real:** ran the full suite (62 tests: 55 existing + 7 new)
+against a real local Postgres container -- all pass, including a solo
+run of just the new file.
+
 **Acceptance criteria**
-- [ ] Audit every Prisma query in `app/models/*.server.ts` and
-      `app/routes/*.tsx` for shop-scoping
-- [ ] Add a regression test that asserts cross-shop access is impossible
-      (e.g. shop A cannot read/mutate shop B's experiment by ID)
+- [x] Audit every Prisma query in `app/models/*.server.ts` and
+      `app/routes/*.tsx` for shop-scoping -- done via the security review
+      above
+- [x] Add a regression test that asserts cross-shop access is impossible
+      (e.g. shop A cannot read/mutate shop B's experiment by ID) --
+      `app/models/shop-scoping.server.test.ts`
 - [ ] Consider a lint rule or code-review checklist item to prevent
-      regressions here specifically
+      regressions here specifically -- still open; nothing currently
+      catches a missing `shopId` filter at review/lint time, only this
+      runtime test
 
 ---
 
