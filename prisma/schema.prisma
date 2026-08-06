@@ -9,8 +9,18 @@ generator client {
 // enough when changing adapters.
 // See https://www.prisma.io/docs/orm/reference/prisma-schema-reference#string for more information
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  // Used only by the Prisma CLI (migrate/introspect), never at app runtime.
+  // Needed for hosts that put a transaction-mode pooler (e.g. Supabase's
+  // Supavisor, PgBouncer) in front of Postgres: DATABASE_URL points at the
+  // pooled port for normal app queries, but migrations run DDL and need
+  // session-level features the pooler doesn't support (P1017 "Server has
+  // closed the connection" otherwise) -- so migrate/introspect use this
+  // direct, unpooled connection instead. Locally, both can point at the
+  // same docker-compose Postgres; DIRECT_URL only needs to differ from
+  // DATABASE_URL once a pooler is actually in front of the database.
+  directUrl = env("DIRECT_URL")
 }
 
 model Session {
