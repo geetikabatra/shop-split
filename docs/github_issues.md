@@ -82,30 +82,58 @@ your interactive login.
 
 ---
 
-## Phase 3: Build, push, and deploy the container to Cloud Run
+## [PARTIALLY RESOLVED] Phase 3: Build, push, and deploy the container to Cloud Run
 **Labels:** backend, production-readiness, deployment
 **Depends on:** Phase 2 (GCP setup)
 
 Get the actual app running on Cloud Run, with secrets handled properly
 rather than as plain env vars.
 
-**Acceptance criteria**
-- [ ] Image built and pushed via `gcloud builds submit` (no local Docker
-      auth juggling needed -- Cloud Build handles it)
-- [ ] `DATABASE_URL` (pooled, port 6543) and `SHOPIFY_API_SECRET` stored in
-      Secret Manager, not passed as plain `--set-env-vars`
-- [ ] `gcloud run deploy` succeeds; service reachable at its
-      `*.run.app` URL
-- [ ] Confirm `react-router-serve` actually binds to Cloud Run's injected
-      `PORT` (verified locally that it respects `process.env.PORT`, but not
-      yet confirmed against a real Cloud Run instance)
-- [ ] Consider adding Upstash Redis (`REDIS_URL`) at this step -- Cloud
-      Run's multi-instance/scale-to-zero model means the in-memory
+**Done:**
+- Image built and pushed via `gcloud builds submit` to
+  `asia-northeast1-docker.pkg.dev/shopsplit-prod/shopsplit/app` (Cloud
+  Build handled it, no local Docker auth needed)
+- `DATABASE_URL` (pooled, port 6543), `SHOPIFY_API_SECRET`, and (a late
+  addition -- see below) `DIRECT_URL` all stored in Secret Manager, with
+  the Cloud Run service account explicitly granted
+  `roles/secretmanager.secretAccessor` on each (deploy fails without this;
+  it's not automatic)
+- `gcloud run deploy` succeeded; service live at
+  `https://shopsplit-537256850164.asia-northeast1.run.app` (confirmed via
+  `curl -I`, HTTP 200)
+- Confirmed live: `react-router-serve` binds to Cloud Run's injected
+  `PORT` correctly with zero Dockerfile changes
+
+**Two real gotchas hit and fixed along the way, worth knowing about for
+future redeploys:**
+1. The Dockerfile's `docker-start` script runs `prisma migrate deploy` on
+   every container boot, which (per the Phase 1 `directUrl` fix) needs
+   `DIRECT_URL`, not just `DATABASE_URL` -- missing it would have crashed
+   every cold start. Added a third secret (`shopsplit-direct-url`) so this
+   keeps working as-is, rather than restructuring the startup script.
+2. `shopify-app.ts` hard-crashes at boot (`Error: Detected an empty
+   appUrl configuration`) if `SHOPIFY_APP_URL` isn't set -- it can't be
+   deferred to "set it after the first deploy" the way the original plan
+   assumed. Worked around it because Cloud Run's URL turned out to be
+   deterministic (`https://<service>-<project-number>.<region>.run.app`,
+   confirmed via `gcloud run services describe` even before a successful
+   revision existed), so it could be computed and set correctly on the
+   very first deploy attempt.
+
+**Still open:**
+- [ ] Consider adding Upstash Redis (`REDIS_URL`) -- Cloud Run's
+      multi-instance/scale-to-zero model means the in-memory
       rate-limiter fallback doesn't share state across instances, so the
       shared-store rate limiting from `app/utils/rate-limit.server.ts`
-      only actually applies in production if `REDIS_URL` is set
-- [ ] (Optional) Custom domain mapped for a stable URL instead of the
-      default `*.run.app` one, for free managed HTTPS
+      only actually applies in production if `REDIS_URL` is set. Not done
+      yet.
+- [ ] (Optional) Custom domain mapped instead of the default `*.run.app`
+      one, for free managed HTTPS
+- [ ] The Supabase database password used in the `DATABASE_URL`/
+      `DIRECT_URL` secrets is still the one exposed in chat during Phase 1
+      (rotation deferred by choice, tracked in the dedicated password
+      -rotation issue above) -- once rotated, these two secrets need
+      `gcloud secrets versions add` with the new value
 
 ---
 
