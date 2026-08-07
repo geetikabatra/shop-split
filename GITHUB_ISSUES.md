@@ -930,15 +930,17 @@ real install.
 `https://shopsplit-537256850164.asia-northeast1.run.app`.
 `shopify.app.toml` updated and pushed via `shopify app deploy`. Secrets
 (`DATABASE_URL`, `DIRECT_URL`, `SHOPIFY_API_SECRET`) live in Secret
-Manager, not committed. Full breakdown of how this was done, including
-two real gotchas hit along the way, is in `docs/github_issues.md`
+Manager, not committed. **Verified live end to end:** a real OAuth
+install against the production URL completed successfully -- a genuine
+`Session` row landed in production Supabase and the app UI rendered
+correctly in the embedded admin. Full breakdown, including four real
+gotchas hit and fixed along the way (a stale `shopify app dev` process
++ Shopify's separate "dev preview" cache both silently overriding the
+production URL, and a trailing-newline bug in how the secrets were
+created that broke HMAC verification), is in `docs/github_issues.md`
 (Phases 1-4).
 
 **Still open:**
-- [ ] End-to-end live verification -- a real OAuth install against the
-      production URL hasn't been done yet, only confirmed structurally
-      (the container boots correctly, which requires a correct
-      `SHOPIFY_APP_URL`)
 - [ ] The Supabase database password in the deployed secrets is the one
       exposed in this session's chat history -- rotation was deferred by
       choice, tracked in `docs/github_issues.md`
@@ -953,9 +955,8 @@ two real gotchas hit along the way, is in `docs/github_issues.md`
       deployed via `shopify app deploy`
 - [x] Production secrets (`SHOPIFY_API_SECRET`, `DATABASE_URL`, etc.)
       managed via the host's secret store, never committed
-- [ ] `SHOPIFY_APP_URL` and friends verified correct in the deployed
-      environment -- confirmed structurally, not yet via a real
-      end-to-end OAuth install
+- [x] `SHOPIFY_APP_URL` and friends verified correct in the deployed
+      environment -- confirmed via a real end-to-end OAuth install
 
 ---
 

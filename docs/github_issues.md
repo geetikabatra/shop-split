@@ -137,7 +137,7 @@ future redeploys:**
 
 ---
 
-## [PARTIALLY RESOLVED] Phase 4: Wire the production URL back into Shopify
+## [RESOLVED] Phase 4: Wire the production URL back into Shopify
 **Labels:** setup, production-readiness, deployment
 **Depends on:** Phase 3 (Cloud Run deployment)
 
@@ -148,25 +148,44 @@ the placeholder/tunnel URL it currently has.
 - `shopify.app.toml` updated: `application_url`, `[auth] redirect_urls`,
   `[app_proxy] url` all point at
   `https://shopsplit-537256850164.asia-northeast1.run.app`
-- `shopify app deploy --allow-updates` run successfully (existing CLI
-  login session from earlier in this work was still valid); released as
-  app version `shopsplit-2`
+- `shopify app deploy --allow-updates` run successfully; released as app
+  version `shopsplit-2`, then `shopsplit-3` (see below)
 - As a side effect, the CLI also dropped `include_config_on_deploy` from
   `shopify.app.toml` on its own -- that field is no longer supported and
   this is expected automatic cleanup, not a manual edit
-- `SHOPIFY_APP_URL` is confirmed live and correct in the deployed
-  environment -- it's the same value that let the Cloud Run container
-  boot successfully in Phase 3 (the app hard-crashes on an empty/wrong
-  `appUrl`, so a live, serving container is itself proof this is right)
 
-**Still open:** the above confirms the URL is *structurally* correct
-(the process boots, references itself correctly), but nobody has
-actually clicked through a real OAuth install against this production
-URL yet -- e.g. installing the app fresh on a dev/test store and
-confirming the auth callback (`/api/auth`) and app proxy round-trip
-work end to end, the way earlier milestones were verified live on
-shopsplit-z1lscgsw.myshopify.com. Worth doing before calling deployment
-hardening fully done.
+**Verified live end to end**, not just structurally: opened the app fresh
+from the Shopify admin, completed a real OAuth install against the
+production URL, and confirmed both a real `Session` row landed in the
+production Supabase database (`shop: shopsplit-z1lscgsw.myshopify.com`)
+and the actual app UI rendered correctly in the embedded admin.
+
+**Two real bugs found and fixed to get there:**
+
+1. **A still-running `shopify app dev` process was overriding the
+   production config.** It had been running continuously since before
+   this deployment work started, and `shopify.app.toml` has
+   `automatically_update_urls_on_dev = true`. The embedded admin kept
+   loading the dead dev tunnel (`edition-ons-scenes-casinos.trycloudflare.com`)
+   instead of Cloud Run, even after a successful `shopify app deploy`.
+   There's also a separate, persistent "dev preview" association (visible
+   in Shopify admin's own "Dev Console" panel, with a "Clean dev preview"
+   button) that outlives the local process and has to be cleared
+   independently -- killing the process alone wasn't enough. Fixed by
+   stopping `shopify app dev`, clicking "Clean dev preview" in that
+   panel, and re-running `shopify app deploy` (released as `shopsplit-3`).
+2. **Secret Manager values had a trailing newline byte.** All three
+   secrets were created with a bash here-string (`<<< "value"`), which
+   silently appends `\n`. Postgres connection string parsers tolerate
+   trailing whitespace, so `DATABASE_URL`/`DIRECT_URL` worked fine
+   despite this -- but HMAC signature verification is byte-exact, so the
+   corrupted `SHOPIFY_API_SECRET` caused every embedded app load to fail
+   with a bare `401 Unauthorized`. Confirmed via `gcloud secrets versions
+   access ... | xxd` (trailing `0a` byte). Fixed by adding new versions
+   of all three secrets via `printf '%s' "value" | gcloud secrets
+   versions add ...` instead, then forcing a new Cloud Run revision
+   (`:latest` is resolved once at container start, not live-refreshed)
+   with `gcloud run services update --set-secrets=...`.
 
 **Acceptance criteria**
 - [x] `shopify.app.toml` updated: `application_url`, `[auth] redirect_urls`,
@@ -174,6 +193,6 @@ hardening fully done.
       domain)
 - [x] `shopify app deploy` run to push the config to Shopify (interactive
       CLI login required)
-- [ ] `SHOPIFY_APP_URL` and related values verified correct in the deployed
-      environment itself -- confirmed structurally (container boots), not
-      yet via a real end-to-end OAuth install
+- [x] `SHOPIFY_APP_URL` and related values verified correct in the deployed
+      environment itself -- confirmed via a real end-to-end OAuth install
+      (live Session row in production Supabase, app UI rendered correctly)
