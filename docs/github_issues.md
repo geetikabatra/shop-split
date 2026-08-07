@@ -137,20 +137,43 @@ future redeploys:**
 
 ---
 
-## Phase 4: Wire the production URL back into Shopify
+## [PARTIALLY RESOLVED] Phase 4: Wire the production URL back into Shopify
 **Labels:** setup, production-readiness, deployment
 **Depends on:** Phase 3 (Cloud Run deployment)
 
 Point the Shopify app config at the real, stable production URL instead of
 the placeholder/tunnel URL it currently has.
 
+**Done:**
+- `shopify.app.toml` updated: `application_url`, `[auth] redirect_urls`,
+  `[app_proxy] url` all point at
+  `https://shopsplit-537256850164.asia-northeast1.run.app`
+- `shopify app deploy --allow-updates` run successfully (existing CLI
+  login session from earlier in this work was still valid); released as
+  app version `shopsplit-2`
+- As a side effect, the CLI also dropped `include_config_on_deploy` from
+  `shopify.app.toml` on its own -- that field is no longer supported and
+  this is expected automatic cleanup, not a manual edit
+- `SHOPIFY_APP_URL` is confirmed live and correct in the deployed
+  environment -- it's the same value that let the Cloud Run container
+  boot successfully in Phase 3 (the app hard-crashes on an empty/wrong
+  `appUrl`, so a live, serving container is itself proof this is right)
+
+**Still open:** the above confirms the URL is *structurally* correct
+(the process boots, references itself correctly), but nobody has
+actually clicked through a real OAuth install against this production
+URL yet -- e.g. installing the app fresh on a dev/test store and
+confirming the auth callback (`/api/auth`) and app proxy round-trip
+work end to end, the way earlier milestones were verified live on
+shopsplit-z1lscgsw.myshopify.com. Worth doing before calling deployment
+hardening fully done.
+
 **Acceptance criteria**
-- [ ] `shopify.app.toml` updated: `application_url`, `[auth] redirect_urls`,
+- [x] `shopify.app.toml` updated: `application_url`, `[auth] redirect_urls`,
       `[app_proxy] url` all point at the Cloud Run URL (or mapped custom
       domain)
-- [ ] `shopify app deploy` run to push the config to Shopify (interactive
+- [x] `shopify app deploy` run to push the config to Shopify (interactive
       CLI login required)
 - [ ] `SHOPIFY_APP_URL` and related values verified correct in the deployed
-      environment itself, not just locally (per the existing acceptance
-      criteria in `GITHUB_ISSUES.md`'s "Harden production deployment
-      configuration" issue)
+      environment itself -- confirmed structurally (container boots), not
+      yet via a real end-to-end OAuth install

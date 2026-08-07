@@ -917,7 +917,7 @@ terminal to read.
 
 ---
 
-### Harden production deployment configuration
+### [PARTIALLY RESOLVED] Harden production deployment configuration
 **Labels:** setup, production-readiness
 
 The app currently runs against a `trycloudflare.com` tunnel that changes
@@ -925,15 +925,37 @@ on every `shopify app dev` restart, with `application_url` in
 `shopify.app.toml` left as a placeholder. None of this is viable for a
 real install.
 
+**Done:** deployed to Cloud Run (project `shopsplit-prod`, region
+`asia-northeast1`) with production Postgres on Supabase, live at
+`https://shopsplit-537256850164.asia-northeast1.run.app`.
+`shopify.app.toml` updated and pushed via `shopify app deploy`. Secrets
+(`DATABASE_URL`, `DIRECT_URL`, `SHOPIFY_API_SECRET`) live in Secret
+Manager, not committed. Full breakdown of how this was done, including
+two real gotchas hit along the way, is in `docs/github_issues.md`
+(Phases 1-4).
+
+**Still open:**
+- [ ] End-to-end live verification -- a real OAuth install against the
+      production URL hasn't been done yet, only confirmed structurally
+      (the container boots correctly, which requires a correct
+      `SHOPIFY_APP_URL`)
+- [ ] The Supabase database password in the deployed secrets is the one
+      exposed in this session's chat history -- rotation was deferred by
+      choice, tracked in `docs/github_issues.md`
+- [ ] Optional: Upstash Redis (`REDIS_URL`) for cross-instance rate
+      limiting, and a custom domain instead of the default `*.run.app`
+      one
+
 **Acceptance criteria**
-- [ ] App deployed to a real host with a stable domain and HTTPS
-- [ ] `shopify.app.toml` `application_url`/`auth.redirect_urls`/
+- [x] App deployed to a real host with a stable domain and HTTPS
+- [x] `shopify.app.toml` `application_url`/`auth.redirect_urls`/
       `app_proxy.url` updated to the stable production domain and
       deployed via `shopify app deploy`
-- [ ] Production secrets (`SHOPIFY_API_SECRET`, `DATABASE_URL`, etc.)
+- [x] Production secrets (`SHOPIFY_API_SECRET`, `DATABASE_URL`, etc.)
       managed via the host's secret store, never committed
 - [ ] `SHOPIFY_APP_URL` and friends verified correct in the deployed
-      environment (not just locally)
+      environment -- confirmed structurally, not yet via a real
+      end-to-end OAuth install
 
 ---
 

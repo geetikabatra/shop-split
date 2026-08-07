@@ -2,7 +2,7 @@
 
 client_id = "34c3f6df1746c15b43f4079da83d28e2"
 name = "shopsplit"
-application_url = "https://example.com"
+application_url = "https://shopsplit-537256850164.asia-northeast1.run.app"
 embedded = true
 
 [access_scopes]
@@ -61,13 +61,12 @@ api_version = "2026-10"
   uri = "/webhooks/shop/redact"
 
 [auth]
-redirect_urls = [ "https://example.com/api/auth" ]
+redirect_urls = [ "https://shopsplit-537256850164.asia-northeast1.run.app/api/auth" ]
 
 [app_proxy]
-url = "https://example.com/proxy"
+url = "https://shopsplit-537256850164.asia-northeast1.run.app/proxy"
 prefix = "apps"
 subpath = "shopsplit"
 
 [build]
-include_config_on_deploy = true
 automatically_update_urls_on_dev = true
